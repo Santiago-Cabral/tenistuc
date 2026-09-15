@@ -1,0 +1,9 @@
+# TenisTuc — Supabase config (tenistuc_final)
+# La edge function vive en src/supabase/functions/notify
+# IMPORTANTE: correr los comandos del CLI desde la carpeta `src/supabase`
+#   Ej:  cd src/supabase   →   npx supabase functions deploy notify
+
+project_id = "qodajlsxihukgfdvntjy"
+
+[functions.notify]
+verify_jwt = false

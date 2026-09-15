@@ -1,0 +1,483 @@
+// app/challenge/[id].tsx
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    ActivityIndicator,
+    Modal,
+    TextInput,
+    TouchableOpacity,
+    Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
+import { Colors, Typography, Spacing, Radius } from '../../src/theme';
+import { useAuthStore } from '../../src/stores/authStore';
+import { useChallenges, Challenge, ChallengeProfile } from '../../src/hooks/useChallenges';
+import { Avatar } from '../../src/components/ui/Avatar';
+import { Badge } from '../../src/components/ui/Badge';
+import { Button } from '../../src/components/ui/Button';
+import { Card } from '../../src/components/ui/Card';
+
+const VENUES = [
+    'Lawn Tenis Club',
+    'Club Atlético San Martín',
+    'Tucumán Lawn Tennis',
+    'Club Universitario',
+    'Club Social Sportivo',
+    'Otro',
+];
+
+const STATUS_CONFIG: Record<
+    string,
+    { label: string; color: string; textColor: string }
+> = {
+    pending: { label: 'Pendiente', color: Colors.tertiaryContainer, textColor: Colors.tertiary },
+    accepted: { label: 'Aceptado', color: Colors.primaryContainer, textColor: Colors.primaryDim },
+    rejected: { label: 'Rechazado', color: '#F9DEDC', textColor: Colors.error },
+    expired: { label: 'Expirado', color: Colors.surfaceContainerHigh, textColor: Colors.onSurfaceVariant },
+};
+
+function formatDate(value: string | null): string {
+    if (!value) return 'Sin fecha propuesta';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return value;
+    return d.toLocaleString('es-AR', {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+export default function ChallengeDetailScreen() {
+    const { id } = useLocalSearchParams<{ id: string }>();
+    const router = useRouter();
+    const { profile } = useAuthStore();
+    const {
+        getChallenge,
+        acceptChallenge,
+        rejectChallenge,
+        cancelChallenge,
+        reproposeChallenge,
+        loading,
+    } = useChallenges();
+
+    const [challenge, setChallenge] = useState<Challenge | null>(null);
+    const [fetching, setFetching] = useState(true);
+    const [actionLoading, setActionLoading] = useState<
+        'accept' | 'reject' | 'cancel' | 'repropose' | null
+    >(null);
+
+    const [reproposeVisible, setReproposeVisible] = useState(false);
+    const [newDate, setNewDate] = useState('');
+    const [newVenue, setNewVenue] = useState('');
+
+    const load = useCallback(async () => {
+        if (!id) return;
+        setFetching(true);
+        const data = await getChallenge(id);
+        setChallenge(data);
+        setFetching(false);
+    }, [id, getChallenge]);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    if (fetching) {
+        return (
+            <SafeAreaView style={styles.safe} edges={['top']}>
+                <View style={styles.center}>
+                    <ActivityIndicator color={Colors.primary} size="large" />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (!challenge) {
+        return (
+            <SafeAreaView style={styles.safe} edges={['top']}>
+                <View style={styles.headerRow}>
+                    <TouchableOpacity onPress={() => router.back()}>
+                        <Ionicons name="chevron-back" size={26} color={Colors.onSurface} />
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.center}>
+                    <Ionicons name="alert-circle-outline" size={40} color={Colors.onSurfaceVariant} />
+                    <Text style={styles.emptyText}>No se encontró el desafío</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    const isChallenger = profile?.id === challenge.challenger_id;
+    const isChallenged = profile?.id === challenge.challenged_id;
+    const rival: ChallengeProfile | undefined = isChallenger
+        ? challenge.challenged
+        : challenge.challenger;
+    const me: ChallengeProfile | undefined = isChallenger
+        ? challenge.challenger
+        : challenge.challenged;
+
+    const isPending = challenge.status === 'pending';
+    const lastProposalIsMine = challenge.proposed_by === profile?.id;
+    const canRespond = isPending && !lastProposalIsMine && (isChallenger || isChallenged);
+    const canCancel = isPending && isChallenger;
+    const statusInfo = STATUS_CONFIG[challenge.status] ?? STATUS_CONFIG.expired;
+
+    const handleAccept = async () => {
+        setActionLoading('accept');
+        const ok = await acceptChallenge(challenge.id);
+        setActionLoading(null);
+        if (ok) {
+            Alert.alert('Listo', 'Desafío aceptado, el partido fue agendado.');
+            load();
+        } else {
+            Alert.alert('No se pudo aceptar', 'Intentá de nuevo en unos segundos.');
+        }
+    };
+
+    const handleReject = async () => {
+        Alert.alert('Rechazar desafío', '¿Seguro que querés rechazar este desafío?', [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+                text: 'Rechazar',
+                style: 'destructive',
+                onPress: async () => {
+                    setActionLoading('reject');
+                    const ok = await rejectChallenge(challenge.id);
+                    setActionLoading(null);
+                    if (ok) load();
+                },
+            },
+        ]);
+    };
+
+    const handleCancel = async () => {
+        Alert.alert('Cancelar desafío', '¿Querés cancelar este desafío?', [
+            { text: 'No', style: 'cancel' },
+            {
+                text: 'Sí, cancelar',
+                style: 'destructive',
+                onPress: async () => {
+                    setActionLoading('cancel');
+                    const ok = await cancelChallenge(challenge.id);
+                    setActionLoading(null);
+                    if (ok) load();
+                },
+            },
+        ]);
+    };
+
+    const openRepropose = () => {
+        setNewDate(challenge.proposed_date ?? '');
+        setNewVenue(challenge.proposed_venue ?? '');
+        setReproposeVisible(true);
+    };
+
+    const handleRepropose = async () => {
+        if (!newDate || !newVenue) {
+            Alert.alert('Falta info', 'Elegí fecha y sede');
+            return;
+        }
+        setActionLoading('repropose');
+        const ok = await reproposeChallenge({
+            challengeId: challenge.id,
+            proposedDate: newDate,
+            proposedVenue: newVenue,
+        });
+        setActionLoading(null);
+        if (ok) {
+            setReproposeVisible(false);
+            load();
+        } else {
+            Alert.alert('No se pudo actualizar', 'Intentá de nuevo.');
+        }
+    };
+
+    return (
+        <SafeAreaView style={styles.safe} edges={['top']}>
+            <View style={styles.headerRow}>
+                <TouchableOpacity onPress={() => router.back()}>
+                    <Ionicons name="chevron-back" size={26} color={Colors.onSurface} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Desafío</Text>
+                <View style={{ width: 26 }} />
+            </View>
+
+            <ScrollView
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+            >
+                <Card style={styles.playersCard}>
+                    <View style={styles.playerCol}>
+                        <Avatar uri={me?.avatar_url ?? null} size={64} online={false} />
+                        <Text style={styles.playerName}>{me?.full_name ?? 'Vos'}</Text>
+                        <Text style={styles.playerLevel}>{me?.level}</Text>
+                    </View>
+
+                    <View style={styles.vsCol}>
+                        <Text style={styles.vsText}>VS</Text>
+                        <Ionicons name="tennisball-outline" size={20} color={Colors.primary} />
+                    </View>
+
+                    <View style={styles.playerCol}>
+                        <Avatar uri={rival?.avatar_url ?? null} size={64} online={false} />
+                        <Text style={styles.playerName}>{rival?.full_name ?? 'Rival'}</Text>
+                        <Text style={styles.playerLevel}>{rival?.level}</Text>
+                    </View>
+                </Card>
+
+                <View style={styles.statusRow}>
+                    <Badge
+                        label={statusInfo.label}
+                        color={statusInfo.color}
+                        textColor={statusInfo.textColor}
+                    />
+                    {isPending && (
+                        <Text style={styles.proposedByText}>
+                            {lastProposalIsMine
+                                ? 'Esperando confirmación del rival'
+                                : 'Propuesta a tu favor, podés responder'}
+                        </Text>
+                    )}
+                </View>
+
+                <Card style={styles.detailsCard}>
+                    <View style={styles.detailRow}>
+                        <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+                        <View style={styles.detailTextCol}>
+                            <Text style={styles.detailLabel}>Fecha y hora</Text>
+                            <Text style={styles.detailValue}>
+                                {formatDate(challenge.proposed_date)}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.divider} />
+
+                    <View style={styles.detailRow}>
+                        <Ionicons name="location-outline" size={20} color={Colors.primary} />
+                        <View style={styles.detailTextCol}>
+                            <Text style={styles.detailLabel}>Sede</Text>
+                            <Text style={styles.detailValue}>
+                                {challenge.proposed_venue ?? 'Sin definir'}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {!!challenge.message && (
+                        <>
+                            <View style={styles.divider} />
+                            <View style={styles.detailRow}>
+                                <Ionicons
+                                    name="chatbubble-ellipses-outline"
+                                    size={20}
+                                    color={Colors.primary}
+                                />
+                                <View style={styles.detailTextCol}>
+                                    <Text style={styles.detailLabel}>Mensaje</Text>
+                                    <Text style={styles.detailValue}>{challenge.message}</Text>
+                                </View>
+                            </View>
+                        </>
+                    )}
+                </Card>
+
+                {isPending && (
+                    <View style={styles.actionsCol}>
+                        {canRespond && (
+                            <>
+                                <Button
+                                    label="Aceptar desafío"
+                                    onPress={handleAccept}
+                                    loading={actionLoading === 'accept'}
+                                    disabled={!!actionLoading}
+                                />
+                                <Button
+                                    label="Proponer otra fecha/sede"
+                                    onPress={openRepropose}
+                                    variant="secondary"
+                                    disabled={!!actionLoading}
+                                />
+                                <Button
+                                    label="Rechazar"
+                                    onPress={handleReject}
+                                    variant="ghost"
+                                    loading={actionLoading === 'reject'}
+                                    disabled={!!actionLoading}
+                                />
+                            </>
+                        )}
+
+                        {lastProposalIsMine && !canCancel && (
+                            <Text style={styles.waitingText}>
+                                Esperando que {rival?.full_name ?? 'el rival'} confirme tu propuesta.
+                            </Text>
+                        )}
+
+                        {canCancel && (
+                            <Button
+                                label="Cancelar desafío"
+                                onPress={handleCancel}
+                                variant="ghost"
+                                loading={actionLoading === 'cancel'}
+                                disabled={!!actionLoading}
+                            />
+                        )}
+                    </View>
+                )}
+
+                {challenge.status === 'accepted' && challenge.match_id && (
+                    <Button
+                        label="Ver partido"
+                        onPress={() => router.push(`/matches` as any)}
+                        style={{ marginTop: Spacing.lg }}
+                    />
+                )}
+            </ScrollView>
+
+            <Modal visible={reproposeVisible} transparent animationType="slide">
+                <View style={styles.overlay}>
+                    <View style={styles.modalContainer}>
+                        <Text style={styles.modalTitle}>Nueva propuesta</Text>
+
+                        <TextInput
+                            placeholder="Fecha y hora (2026-06-20 18:00)"
+                            placeholderTextColor={Colors.onSurfaceVariant}
+                            value={newDate}
+                            onChangeText={setNewDate}
+                            style={styles.input}
+                        />
+
+                        <Text style={styles.modalLabel}>Sede</Text>
+                        <View style={styles.venuesWrap}>
+                            {VENUES.map((v) => (
+                                <TouchableOpacity
+                                    key={v}
+                                    onPress={() => setNewVenue(v)}
+                                    style={[
+                                        styles.venueChip,
+                                        newVenue === v && styles.venueChipActive,
+                                    ]}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.venueChipText,
+                                            newVenue === v && styles.venueChipTextActive,
+                                        ]}
+                                    >
+                                        {v}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <View style={styles.modalActions}>
+                            <Button
+                                label="Cancelar"
+                                onPress={() => setReproposeVisible(false)}
+                                variant="ghost"
+                                style={{ flex: 1 }}
+                            />
+                            <Button
+                                label="Enviar"
+                                onPress={handleRepropose}
+                                loading={actionLoading === 'repropose'}
+                                style={{ flex: 1 }}
+                            />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        </SafeAreaView>
+    );
+}
+
+const styles = StyleSheet.create({
+    safe: { flex: 1, backgroundColor: Colors.surface },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.base },
+    emptyText: { ...Typography.titleMd, color: Colors.onSurfaceVariant },
+
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.base,
+    },
+    headerTitle: { ...Typography.titleMd, color: Colors.onSurface },
+
+    content: { padding: Spacing.lg, paddingBottom: Spacing.xxxxl, gap: Spacing.lg },
+
+    playersCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: Spacing.xl,
+    },
+    playerCol: { flex: 1, alignItems: 'center', gap: Spacing.xs },
+    playerName: { ...Typography.labelLg, color: Colors.onSurface, textAlign: 'center' },
+    playerLevel: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
+    vsCol: { alignItems: 'center', gap: Spacing.xs, paddingHorizontal: Spacing.sm },
+    vsText: { ...Typography.titleMd, color: Colors.primary },
+
+    statusRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.base, flexWrap: 'wrap' },
+    proposedByText: { ...Typography.bodySm, color: Colors.onSurfaceVariant, flex: 1 },
+
+    detailsCard: { gap: Spacing.base },
+    detailRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.base },
+    detailTextCol: { flex: 1, gap: 2 },
+    detailLabel: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
+    detailValue: { ...Typography.bodyLg, color: Colors.onSurface },
+    divider: { height: 1, backgroundColor: Colors.surfaceContainerHigh },
+
+    actionsCol: { gap: Spacing.base },
+    waitingText: {
+        ...Typography.bodyMd,
+        color: Colors.onSurfaceVariant,
+        textAlign: 'center',
+        paddingVertical: Spacing.base,
+    },
+
+    overlay: {
+        flex: 1,
+        backgroundColor: '#0008',
+        justifyContent: 'center',
+        padding: Spacing.xl,
+    },
+    modalContainer: {
+        backgroundColor: Colors.surfaceContainerLowest,
+        borderRadius: Radius.lg,
+        padding: Spacing.xl,
+        gap: Spacing.base,
+    },
+    modalTitle: { ...Typography.titleMd, color: Colors.onSurface },
+    modalLabel: { ...Typography.labelLg, color: Colors.onSurface, marginTop: Spacing.sm },
+    input: {
+        borderWidth: 1,
+        borderColor: Colors.surfaceContainerHigh,
+        borderRadius: Radius.md,
+        padding: Spacing.base,
+        color: Colors.onSurface,
+        ...Typography.bodyMd,
+    },
+    venuesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    venueChip: {
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.base,
+        borderRadius: Radius.full,
+        borderWidth: 1,
+        borderColor: Colors.surfaceContainerHigh,
+    },
+    venueChipActive: { backgroundColor: Colors.primaryContainer, borderColor: Colors.primary },
+    venueChipText: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
+    venueChipTextActive: { color: Colors.primaryDim },
+    modalActions: { flexDirection: 'row', gap: Spacing.base, marginTop: Spacing.base },
+});

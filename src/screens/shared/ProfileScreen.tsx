@@ -1,0 +1,355 @@
+import React, { useEffect, useState } from 'react';
+import {
+    View, Text, ScrollView, TouchableOpacity,
+    StyleSheet, RefreshControl,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
+import { Badge, Button, Card, SectionHeader } from '../../components/ui';
+import { useAuthStore } from '../../stores/authStore';
+import { supabase } from '../../lib/supabase';
+
+export default function ProfileScreen() {
+    const router = useRouter();
+    const { profile, signOut, fetchProfile } = useAuthStore();
+    const [refreshing, setRefreshing] = useState(false);
+    const [globalRank, setGlobalRank] = useState<number | null>(null);
+
+    const loadRank = async () => {
+        if (!profile) return;
+        const { count } = await supabase
+            .from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .gt('elo', profile.elo);
+        if (count !== null) setGlobalRank(count + 1);
+    };
+
+    useEffect(() => { loadRank(); }, [profile?.elo]);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchProfile();
+        await loadRank();
+        setRefreshing(false);
+    };
+
+    const winrate = profile && (profile.wins + profile.losses) > 0
+        ? Math.round((profile.wins / (profile.wins + profile.losses)) * 100)
+        : 0;
+
+    const stats = [
+        { label: 'Partidos', value: (profile?.wins ?? 0) + (profile?.losses ?? 0) },
+        { label: 'Victorias', value: profile?.wins ?? 0 },
+        { label: 'Derrotas', value: profile?.losses ?? 0 },
+        { label: 'Winrate', value: `${winrate}%` },
+    ];
+
+    const infoItems = [
+        { icon: 'location-outline' as const, text: profile?.city ?? 'Sin ciudad' },
+        { icon: 'tennisball-outline' as const, text: profile?.club ?? 'Sin club' },
+    ];
+
+    return (
+        <SafeAreaView style={styles.safe} edges={['top']}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={Colors.primary}
+                    />
+                }
+            >
+                {/* ── Header gradiente ── */}
+                <LinearGradient
+                    colors={[Colors.primary, Colors.primaryDim]}
+                    style={styles.headerGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                >
+                    <TouchableOpacity
+                        style={styles.editBtn}
+                        onPress={() => router.push('/edit-profile')}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="pencil" size={14} color={Colors.primaryContainer} />
+                        <Text style={styles.editBtnText}>Editar</Text>
+                    </TouchableOpacity>
+
+                    {/* Avatar */}
+                    <TouchableOpacity
+                        style={styles.avatarWrap}
+                        onPress={() => router.push('/edit-profile')}
+                        activeOpacity={0.85}
+                    >
+                        {profile?.avatar_url ? (
+                            <Image
+                                source={{ uri: profile.avatar_url }}
+                                style={styles.avatar}
+                                contentFit="cover"
+                            />
+                        ) : (
+                            <View style={styles.avatarPlaceholder}>
+                                <Ionicons name="person" size={44} color="rgba(255,255,255,0.6)" />
+                            </View>
+                        )}
+                        {/* Indicador de cámara */}
+                        <View style={styles.cameraChip}>
+                            <Ionicons name="camera" size={12} color={Colors.primary} />
+                        </View>
+                    </TouchableOpacity>
+
+                    <Text style={styles.name}>{profile?.full_name ?? 'Atleta'}</Text>
+                    <Text style={styles.username}>@{profile?.username ?? 'usuario'}</Text>
+
+                    <View style={styles.levelBadgeWrap}>
+                        <Badge
+                            label={profile?.level ?? 'Amateur I'}
+                            color="rgba(183,228,199,0.2)"
+                            textColor={Colors.primaryContainer}
+                        />
+                    </View>
+                </LinearGradient>
+
+                <View style={styles.content}>
+
+                    {/* ── ELO + Ranking ── */}
+                    <Card style={styles.eloCard}>
+                        <View style={styles.eloLeft}>
+                            <Text style={styles.eloLabel}>PUNTOS ELO</Text>
+                            <Text style={styles.eloValue}>
+                                {(profile?.elo ?? 1000).toLocaleString('es')}
+                            </Text>
+                        </View>
+                        <View style={styles.eloDivider} />
+                        <View style={styles.eloRight}>
+                            <Text style={styles.rankLabel}>RANKING</Text>
+                            <Text style={styles.rankValue}>
+                                {globalRank !== null ? `#${globalRank}` : '—'}
+                            </Text>
+                        </View>
+                    </Card>
+
+                    {/* ── Stats grid ── */}
+                    <View style={styles.statsGrid}>
+                        {stats.map(s => (
+                            <Card key={s.label} style={styles.statCard}>
+                                <Text style={styles.statValue}>{s.value}</Text>
+                                <Text style={styles.statLabel}>{s.label}</Text>
+                            </Card>
+                        ))}
+                    </View>
+
+                    {/* ── Bio ── */}
+                    {profile?.bio ? (
+                        <Card>
+                            <Text style={styles.sectionLabel}>BIO</Text>
+                            <Text style={styles.bioText}>{profile.bio}</Text>
+                        </Card>
+                    ) : null}
+
+                    {/* ── Info ── */}
+                    <Card style={styles.infoCard}>
+                        {infoItems.map((item, i) => (
+                            <View key={i} style={[styles.infoRow, i > 0 && styles.infoRowBorder]}>
+                                <View style={styles.infoIconWrap}>
+                                    <Ionicons name={item.icon} size={18} color={Colors.primary} />
+                                </View>
+                                <Text style={styles.infoText}>{item.text}</Text>
+                            </View>
+                        ))}
+                    </Card>
+
+                    {/* ── Estilos de juego ── */}
+                    {profile?.play_style && profile.play_style.length > 0 && (
+                        <Card style={styles.stylesCard}>
+                            <Text style={styles.sectionLabel}>ESTILO DE JUEGO</Text>
+                            <View style={styles.stylesWrap}>
+                                {profile.play_style.map(s => (
+                                    <View key={s} style={styles.styleChip}>
+                                        <Text style={styles.styleChipText}>{s}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </Card>
+                    )}
+
+                    {/* ── Cerrar sesión ── */}
+                    <Button
+                        label="Cerrar sesión"
+                        variant="secondary"
+                        onPress={signOut}
+                        style={styles.signOutBtn}
+                    />
+
+                </View>
+
+                <View style={{ height: 100 }} />
+            </ScrollView>
+        </SafeAreaView>
+    );
+}
+
+const styles = StyleSheet.create({
+    safe: { flex: 1, backgroundColor: Colors.surface },
+
+    headerGradient: {
+        paddingTop: Spacing.lg,
+        paddingBottom: Spacing.xxxl,
+        paddingHorizontal: Spacing.xl,
+        alignItems: 'center',
+        gap: Spacing.sm,
+    },
+    editBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-end',
+        gap: 5,
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.base,
+        borderRadius: Radius.full,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+    },
+    editBtnText: {
+        ...Typography.labelMd,
+        color: Colors.primaryContainer,
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+    },
+
+    avatarWrap: {
+        width: 96, height: 96,
+        borderRadius: 48,
+        overflow: 'visible',
+        marginTop: Spacing.md,
+    },
+    avatar: {
+        width: 96, height: 96,
+        borderRadius: 48,
+        borderWidth: 3,
+        borderColor: 'rgba(255,255,255,0.4)',
+    },
+    avatarPlaceholder: {
+        width: 96, height: 96,
+        borderRadius: 48,
+        borderWidth: 3,
+        borderColor: 'rgba(255,255,255,0.4)',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cameraChip: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 28, height: 28,
+        borderRadius: 14,
+        backgroundColor: Colors.primaryContainer,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: Colors.primary,
+    },
+
+    name: {
+        fontFamily: 'Lexend_700Bold',
+        fontSize: 24,
+        color: Colors.primaryContainer,
+        letterSpacing: -0.5,
+        marginTop: Spacing.sm,
+    },
+    username: { ...Typography.bodyMd, color: 'rgba(183,228,199,0.75)' },
+    levelBadgeWrap: { marginTop: Spacing.sm },
+
+    content: {
+        paddingHorizontal: Spacing.xl,
+        paddingTop: Spacing.xl,
+        gap: Spacing.lg,
+    },
+
+    eloCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: Spacing.lg,
+    },
+    eloLeft: { flex: 1, gap: 4 },
+    eloDivider: {
+        width: 1, height: 40,
+        backgroundColor: Colors.outlineVariant,
+        marginHorizontal: Spacing.xl,
+    },
+    eloRight: { flex: 1, alignItems: 'flex-end', gap: 4 },
+    eloLabel: { ...Typography.labelSm, color: Colors.onSurfaceVariant, letterSpacing: 1 },
+    eloValue: {
+        fontFamily: 'Lexend_800ExtraBold',
+        fontSize: 36,
+        color: Colors.primary,
+        letterSpacing: -1,
+    },
+    rankLabel: { ...Typography.labelSm, color: Colors.onSurfaceVariant, letterSpacing: 1 },
+    rankValue: {
+        fontFamily: 'Lexend_700Bold',
+        fontSize: 28,
+        color: Colors.onSurface,
+        letterSpacing: -0.5,
+    },
+
+    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
+    statCard: { flex: 1, minWidth: '45%', alignItems: 'center', gap: 4 },
+    statValue: {
+        fontFamily: 'Lexend_700Bold',
+        fontSize: 28,
+        color: Colors.onSurface,
+        letterSpacing: -0.5,
+    },
+    statLabel: { ...Typography.labelSm, color: Colors.onSurfaceVariant },
+
+    sectionLabel: {
+        ...Typography.labelLg,
+        color: Colors.onSurfaceVariant,
+        letterSpacing: 0.8,
+        marginBottom: Spacing.sm,
+    },
+    bioText: { ...Typography.bodyMd, color: Colors.onSurface, lineHeight: 22 },
+
+    infoCard: { gap: 0, padding: 0, overflow: 'hidden' },
+    infoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        paddingVertical: Spacing.md,
+        paddingHorizontal: Spacing.lg,
+    },
+    infoRowBorder: {
+        borderTopWidth: 1,
+        borderTopColor: Colors.surfaceContainerLow,
+    },
+    infoIconWrap: {
+        width: 36, height: 36,
+        borderRadius: 18,
+        backgroundColor: Colors.primaryContainer,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    infoText: { ...Typography.bodyMd, color: Colors.onSurface },
+
+    stylesCard: { gap: Spacing.sm },
+    stylesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    styleChip: {
+        paddingVertical: 5,
+        paddingHorizontal: Spacing.md,
+        borderRadius: Radius.full,
+        backgroundColor: Colors.primaryContainer,
+    },
+    styleChipText: {
+        ...Typography.labelSm,
+        color: Colors.primary,
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+    },
+
+    signOutBtn: { marginTop: Spacing.sm },
+});

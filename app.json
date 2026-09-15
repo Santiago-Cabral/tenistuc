@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "tenistuc",
+    "slug": "tenistuc",
+    "scheme": "tenistuc",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "",
+      "resizeMode": "contain",
+      "backgroundColor": "#F8FAF9"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tenistuc.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "",
+        "backgroundColor": "#F8FAF9"
+      },
+      "package": "com.tenistuc.app"
+    },
+    "web": {
+      "favicon": "",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "@react-native-community/datetimepicker",
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b157628b-225c-44e5-bafd-3832342cde9a"
+      }
+    },
+    "owner": "scsoftwares-team"
+  }
+}
