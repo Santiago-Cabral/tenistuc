@@ -39,6 +39,9 @@ supabase/.temp/
 supabase/.vscode/
 supabase/.env
 
+# Supabase CLI (en src/supabase/)
+**/.temp/
+
 # misc
 .DS_Store
 *.log
