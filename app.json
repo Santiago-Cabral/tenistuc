@@ -5,10 +5,10 @@
     "scheme": "tenistuc",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "",
+    "icon": "./logoverde.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "",
+      "image": "./logoverde.png",
       "resizeMode": "contain",
       "backgroundColor": "#F8FAF9"
     },
@@ -18,10 +18,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "",
+        "foregroundImage": "./logoverde.png",
         "backgroundColor": "#F8FAF9"
       },
-      "package": "com.tenistuc.app"
+      "package": "com.tenistuc.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "",

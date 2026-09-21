@@ -11,7 +11,7 @@ export interface Tournament {
     id: string;
     name: string;
     description: string | null;
-    status: 'open' | 'in_progress' | 'completed';
+    status: 'open' | 'closed' | 'in_progress' | 'completed';
     image_url: string | null;
     prize_money: number;
     elo_points: number;
@@ -63,6 +63,11 @@ export interface PendingPayment {
     payment_status: 'pending' | 'paid' | 'refunded';
     registered_at: string;
     entry_fee: number;
+    // MercadoPago
+    mp_status: string | null;
+    paid_amount: number | null;
+    commission_amount: number | null;
+    paid_at: string | null;
 }
 
 const normalize = (val: any) => (Array.isArray(val) ? val[0] ?? null : val);
@@ -196,6 +201,21 @@ export async function deleteTournament(id: string) {
 }
 
 // ----------------------------------------------------------------
+// Estado de la lista de inscripción (cerrar / reabrir)
+// ----------------------------------------------------------------
+export async function setTournamentListStatus(tournamentId: string, status: 'open' | 'closed') {
+    const { data, error } = await supabase
+        .from('tournaments')
+        .update({ status })
+        .eq('id', tournamentId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data as Tournament;
+}
+
+// ----------------------------------------------------------------
 // Fechas de torneo (circuito tipo ATT: 5 fechas vie-sáb-dom al año)
 // ----------------------------------------------------------------
 export async function getTournamentDates(tournamentId: string): Promise<TournamentDate[]> {
@@ -290,6 +310,7 @@ export async function getPayments(organizerId: string): Promise<PendingPayment[]
         .from('tournament_registrations')
         .select(`
             id, tournament_id, payment_status, registered_at,
+            mp_status, paid_amount, commission_amount, paid_at,
             player:profiles!tournament_registrations_player_id_fkey(id, full_name, avatar_url)
         `)
         .in('tournament_id', tournamentIds)
@@ -309,6 +330,10 @@ export async function getPayments(organizerId: string): Promise<PendingPayment[]
             payment_status: r.payment_status,
             registered_at: r.registered_at,
             entry_fee: feeByTournament.get(r.tournament_id) ?? 0,
+            mp_status: r.mp_status ?? null,
+            paid_amount: r.paid_amount ?? null,
+            commission_amount: r.commission_amount ?? null,
+            paid_at: r.paid_at ?? null,
         };
     });
 }

@@ -38,12 +38,14 @@ function StatCard({
 
 function statusLabel(status: string) {
     if (status === 'open') return 'Inscripciones abiertas';
+    if (status === 'closed') return 'Lista cerrada';
     if (status === 'in_progress') return 'En curso';
     return 'Finalizado';
 }
 
 function statusColor(status: string) {
     if (status === 'open') return Colors.primary;
+    if (status === 'closed') return Colors.tertiary;
     if (status === 'in_progress') return Colors.tertiary;
     return Colors.onSurfaceVariant;
 }

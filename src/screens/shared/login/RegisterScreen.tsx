@@ -3,49 +3,57 @@ import {
     View, Text, StyleSheet, Alert,
     KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity,
 } from 'react-native';
+import { showAlert } from '../../../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius } from '../../../theme/index';
-import { Button, InputField } from '../../../components/ui/index';
+import { Button, InputField, PrivacyConsent } from '../../../components/ui/index';
 import { useAuthStore } from '../../../stores/authStore';
 
 const LEVELS = ['Amateur I', 'Amateur II', 'Intermedio', 'Avanzado', 'Competitivo'];
 
 export default function RegisterScreen() {
     const router = useRouter();
-    const { signUp } = useAuthStore();
+    const { signUp, recordPrivacyConsent } = useAuthStore();
     const [fullName, setFullName] = useState('');
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [level, setLevel] = useState('Amateur I');
+    const [consent, setConsent] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const handleRegister = async () => {
+        if (!consent) {
+            showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad para poder registrarte.');
+            return;
+        }
         if (!fullName || !username || !email || !password) {
-            Alert.alert('Error', 'Completá todos los campos obligatorios');
+            showAlert('Error', 'Completá todos los campos obligatorios');
             return;
         }
         if (password !== confirmPassword) {
-            Alert.alert('Error', 'Las contraseñas no coinciden');
+            showAlert('Error', 'Las contraseñas no coinciden');
             return;
         }
         if (password.length < 6) {
-            Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+            showAlert('Error', 'La contraseña debe tener al menos 6 caracteres');
             return;
         }
         setLoading(true);
         try {
             await signUp(email.trim().toLowerCase(), password, username.trim(), fullName.trim(), level);
-            Alert.alert(
+            recordPrivacyConsent();
+            showAlert(
                 '¡Cuenta creada!',
                 'Revisá tu email para confirmar tu cuenta.',
                 [{ text: 'OK', onPress: () => router.replace('/login') }]
             );
         } catch (e: any) {
-            Alert.alert('Error al registrarse', e.message ?? 'Intentá de nuevo');
+            showAlert('Error al registrarse', e.message ?? 'Intentá de nuevo');
         } finally {
             setLoading(false);
         }
@@ -72,7 +80,11 @@ export default function RegisterScreen() {
                             style={styles.logoCircle}
                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                         >
-                            <Text style={styles.logoEmoji}>🎾</Text>
+                            <Image
+                                source={require('../../../../logoverde.png')}
+                                style={styles.logoImg}
+                                contentFit="contain"
+                            />
                         </LinearGradient>
                     </View>
 
@@ -146,6 +158,11 @@ export default function RegisterScreen() {
                         </ScrollView>
                     </View>
 
+                    {/* Consentimiento */}
+                    <View style={styles.consentWrap}>
+                        <PrivacyConsent checked={consent} onChange={setConsent} disabled={loading} />
+                    </View>
+
                     <Button
                         label="CREAR CUENTA"
                         onPress={handleRegister}
@@ -184,8 +201,12 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
     },
-    logoEmoji: { fontSize: 22 },
+    logoImg: {
+        width: 44, height: 44,
+        borderRadius: 22,
+    },
     title: {
         fontFamily: 'Lexend_800ExtraBold',
         fontSize: 40,
@@ -228,7 +249,8 @@ const styles = StyleSheet.create({
         color: Colors.onPrimary,
         fontFamily: 'PlusJakartaSans_700Bold',
     },
-    registerBtn: { marginTop: Spacing.xxl },
+    registerBtn: { marginTop: Spacing.xl },
+    consentWrap: { marginTop: Spacing.xl, marginBottom: Spacing.sm },
     loginRow: {
         flexDirection: 'row',
         justifyContent: 'center',

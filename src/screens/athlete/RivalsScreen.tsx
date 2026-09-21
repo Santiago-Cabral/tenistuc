@@ -4,6 +4,7 @@ import {
     View, Text, FlatList, TouchableOpacity,
     StyleSheet, ActivityIndicator, Alert, TextInput,
 } from 'react-native';
+import { showAlert } from '../../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +12,7 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { Avatar, Badge, Card } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { isActuallyOnline } from '../../services/presenceService';
 import CreateChallengeModal from '../../components/challenges/CreateChallengeModal';
 
 interface Rival {
@@ -24,6 +26,7 @@ interface Rival {
     wins: number;
     losses: number;
     is_online: boolean;
+    last_seen?: string | null;
 }
 
 type FilterKey = 'all' | 'level' | 'city' | 'online';
@@ -45,7 +48,7 @@ export default function RivalsScreen() {
         setLoading(true);
         const { data } = await supabase
             .from('profiles')
-            .select('id, full_name, username, avatar_url, city, elo, level, wins, losses, is_online')
+            .select('id, full_name, username, avatar_url, city, elo, level, wins, losses, is_online, last_seen')
             .neq('id', profile.id)
             .limit(80);
 
@@ -62,6 +65,20 @@ export default function RivalsScreen() {
 
     useEffect(() => { loadRivals(); }, [loadRivals]);
 
+    useEffect(() => {
+        const sub = supabase
+            .channel('rivals-presence')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+                const upd = payload.new as Partial<Rival>;
+                if (!upd?.id) return;
+                setRivals((prev) =>
+                    prev.map((r) => (r.id === upd.id ? { ...r, ...upd } : r))
+                );
+            })
+            .subscribe();
+        return () => { supabase.removeChannel(sub); };
+    }, []);
+
     const filtered = useMemo(() => {
         let list = rivals;
 
@@ -70,7 +87,7 @@ export default function RivalsScreen() {
         } else if (filter === 'city' && profile?.city) {
             list = list.filter(r => r.city === profile.city);
         } else if (filter === 'online') {
-            list = list.filter(r => r.is_online);
+            list = list.filter(r => isActuallyOnline(r));
         }
 
         if (search.trim()) {
@@ -144,7 +161,7 @@ export default function RivalsScreen() {
 
         const convId = await notifyByChat(challengeId, rival);
 
-        Alert.alert(
+        showAlert(
             'Desafío enviado',
             `Se le notificó a ${rival.full_name ?? rival.username}. Podrá aceptarlo o reproponer fecha y sede.`,
             [
@@ -243,7 +260,7 @@ export default function RivalsScreen() {
                                     activeOpacity={0.85}
                                 >
                                     <View style={styles.avatarWrap}>
-                                        <Avatar uri={rival.avatar_url} size={56} online={rival.is_online} />
+                                        <Avatar uri={rival.avatar_url} size={56} online={isActuallyOnline(rival)} />
                                     </View>
 
                                     <View style={styles.rivalInfo}>

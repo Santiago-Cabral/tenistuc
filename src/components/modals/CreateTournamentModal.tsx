@@ -4,6 +4,7 @@ import {
     Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet,
     Alert, Platform, KeyboardAvoidingView,
 } from 'react-native';
+import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
@@ -151,7 +152,7 @@ export default function CreateTournamentModal({
     const handleSave = async () => {
         const err = validate();
         if (err) {
-            Alert.alert('Faltan datos', err);
+            showAlert('Faltan datos', err);
             return;
         }
 
@@ -207,7 +208,7 @@ export default function CreateTournamentModal({
 
             onSaved();
         } catch (e: any) {
-            Alert.alert('No se pudo guardar', e.message ?? 'Intentá de nuevo');
+            showAlert('No se pudo guardar', e.message ?? 'Intentá de nuevo');
         } finally {
             setSaving(false);
         }

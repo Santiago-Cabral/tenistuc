@@ -4,6 +4,7 @@ import {
     View, Text, ScrollView, TouchableOpacity,
     StyleSheet, RefreshControl, Alert,
 } from 'react-native';
+import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +13,7 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '../../src/theme/ind
 import { Avatar, Badge, EloIndicator, Card, SectionHeader, Button } from '../../src/components/ui/index';
 import { useAuthStore } from '../../src/stores/authStore';
 import { supabase } from '../../src/lib/supabase';
+import { isActuallyOnline } from '../../src/services/presenceService';
 
 interface PlayerSnippet {
     id: string;
@@ -102,7 +104,7 @@ export default function HomeScreen() {
             supabase
                 .from('tournaments')
                 .select('id, name, status, image_url, prize_money, elo_points, starts_at')
-                .in('status', ['open', 'in_progress'])
+                .in('status', ['open', 'closed', 'in_progress'])
                 .order('created_at', { ascending: false })
                 .limit(3),
 
@@ -158,14 +160,14 @@ export default function HomeScreen() {
             .eq('id', matchId);
         setLoadingId(null);
         if (error) {
-            Alert.alert('Error', 'No se pudo confirmar el partido.');
+            showAlert('Error', 'No se pudo confirmar el partido.');
         } else {
             loadData();
         }
     };
 
     const cancelMatch = (matchId: string) => {
-        Alert.alert('Rechazar partido', '¿Estás seguro que querés rechazar este partido?', [
+        showAlert('Rechazar partido', '¿Estás seguro que querés rechazar este partido?', [
             { text: 'No', style: 'cancel' },
             {
                 text: 'Sí, rechazar', style: 'destructive',
@@ -176,7 +178,7 @@ export default function HomeScreen() {
                         .update({ status: 'cancelled' })
                         .eq('id', matchId);
                     setLoadingId(null);
-                    if (error) Alert.alert('Error', 'No se pudo cancelar el partido.');
+                    if (error) showAlert('Error', 'No se pudo cancelar el partido.');
                     else loadData();
                 },
             },
@@ -220,7 +222,7 @@ export default function HomeScreen() {
                         </Text>
                     </View>
                     <TouchableOpacity onPress={() => router.push('/athleteTabs/profile')} activeOpacity={0.85}>
-                        <Avatar uri={profile?.avatar_url} size={48} online={profile?.is_online ?? false} />
+                        <Avatar uri={profile?.avatar_url} size={48} online={isActuallyOnline(profile)} />
                     </TouchableOpacity>
                 </View>
 
@@ -446,9 +448,9 @@ export default function HomeScreen() {
                                 />
                                 <View style={styles.tourneyContent}>
                                     <Badge
-                                        label={t.status === 'open' ? 'INSCRIPCIONES ABIERTAS' : 'EN JUEGO'}
-                                        color={Colors.primaryContainer}
-                                        textColor={Colors.primary}
+                                        label={t.status === 'open' ? 'INSCRIPCIONES ABIERTAS' : t.status === 'closed' ? 'LISTA CERRADA' : 'EN JUEGO'}
+                                        color={t.status === 'closed' ? Colors.tertiaryContainer : Colors.primaryContainer}
+                                        textColor={t.status === 'closed' ? Colors.tertiary : Colors.primary}
                                     />
                                     <Text style={styles.tourneyName}>{t.name}</Text>
                                     <View style={styles.tourneyMeta}>

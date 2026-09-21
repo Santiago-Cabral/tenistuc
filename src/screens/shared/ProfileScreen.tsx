@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity,
-    StyleSheet, RefreshControl,
+    StyleSheet, RefreshControl, Alert,
 } from 'react-native';
+import { showAlert } from '../../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,7 +16,7 @@ import { supabase } from '../../lib/supabase';
 
 export default function ProfileScreen() {
     const router = useRouter();
-    const { profile, signOut, fetchProfile } = useAuthStore();
+    const { profile, signOut, fetchProfile, deleteAccount } = useAuthStore();
     const [refreshing, setRefreshing] = useState(false);
     const [globalRank, setGlobalRank] = useState<number | null>(null);
 
@@ -35,6 +36,41 @@ export default function ProfileScreen() {
         await fetchProfile();
         await loadRank();
         setRefreshing(false);
+    };
+
+    const handleDeleteAccount = () => {
+        showAlert(
+            'Eliminar mi cuenta',
+            'Se eliminará tu cuenta, tu perfil, tus partidos, ranking y toda tu información. Esta acción es definitiva y no se puede deshacer.',
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Eliminar',
+                    style: 'destructive',
+                    onPress: () => {
+                        showAlert(
+                            'Última confirmación',
+                            '¿Estás seguro? Esta acción es irreversible: eliminá tu cuenta solo si estás 100% seguro.',
+                            [
+                                { text: 'Cancelar', style: 'cancel' },
+                                {
+                                    text: 'Eliminar definitivamente',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            await deleteAccount();
+                                            router.replace('/login');
+                                        } catch (e: any) {
+                                            showAlert('Error', e?.message ?? 'No se pudo eliminar la cuenta');
+                                        }
+                                    },
+                                },
+                            ],
+                        );
+                    },
+                },
+            ],
+        );
     };
 
     const winrate = profile && (profile.wins + profile.losses) > 0
@@ -186,6 +222,16 @@ export default function ProfileScreen() {
                         onPress={signOut}
                         style={styles.signOutBtn}
                     />
+
+                    {/* ── Eliminar cuenta ── */}
+                    <TouchableOpacity
+                        onPress={handleDeleteAccount}
+                        style={styles.deleteBtn}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                        <Text style={styles.deleteBtnText}>Eliminar mi cuenta</Text>
+                    </TouchableOpacity>
 
                 </View>
 
@@ -352,4 +398,20 @@ const styles = StyleSheet.create({
     },
 
     signOutBtn: { marginTop: Spacing.sm },
+    deleteBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: Spacing.md,
+        borderRadius: Radius.full,
+        borderWidth: 1,
+        borderColor: Colors.error,
+        marginTop: Spacing.base,
+    },
+    deleteBtnText: {
+        ...Typography.labelLg,
+        color: Colors.error,
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+    },
 });

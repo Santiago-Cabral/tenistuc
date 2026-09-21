@@ -4,6 +4,7 @@ import {
     View, Text, FlatList, TouchableOpacity,
     StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
+import { showAlert } from '../../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,7 +45,7 @@ export default function RankingScreen() {
             .limit(100);
 
         if (error) {
-            Alert.alert('Error', 'No se pudo cargar el ranking');
+            showAlert('Error', 'No se pudo cargar el ranking');
         } else if (data) {
             setPlayers(data as RankedPlayer[]);
         }
@@ -117,7 +118,7 @@ export default function RankingScreen() {
 
         const convId = await notifyByChat(challengeId, rival);
 
-        Alert.alert(
+        showAlert(
             'Desafío enviado',
             `Se le notificó a ${rival.full_name ?? rival.username}. Podrá aceptarlo o reproponer fecha y sede.`,
             [

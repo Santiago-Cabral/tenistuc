@@ -56,6 +56,15 @@ export default function OrganizerTabsLayout() {
                 }}
             />
             <Tabs.Screen
+                name="messages"
+                options={{
+                    title: "Mensajes",
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="chatbubbles-outline" color={color} size={size} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
                 name="fixture"
                 options={{
                     title: "Fixture",

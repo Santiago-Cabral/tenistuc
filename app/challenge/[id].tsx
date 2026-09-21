@@ -11,6 +11,7 @@ import {
     TouchableOpacity,
     Alert,
 } from 'react-native';
+import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import { Avatar } from '../../src/components/ui/Avatar';
 import { Badge } from '../../src/components/ui/Badge';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
+import { isActuallyOnline } from '../../src/services/presenceService';
 
 const VENUES = [
     'Lawn Tenis Club',
@@ -53,6 +55,33 @@ function formatDate(value: string | null): string {
         hour: '2-digit',
         minute: '2-digit',
     });
+}
+
+// Convierte "2026-06-20 18:00" (lo que escribe el usuario) a ISO 8601.
+// Es hora LOCAL interpretada sin zona horaria → se manda a timestamptz.
+function parseLocalDateTime(input: string): string | null {
+    const m = input.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})[\sT](\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    const [, y, mo, d, h, mi] = m;
+    const date = new Date(+y, +mo - 1, +d, +h, +mi);
+    if (isNaN(date.getTime())) return null;
+    if (
+        date.getFullYear() !== +y ||
+        date.getMonth() !== +mo - 1 ||
+        date.getDate() !== +d
+    ) return null;
+    return date.toISOString();
+}
+
+// Convierte ISO 8601 (timestamptz guardado en DB) a "YYYY-MM-DD HH:MM" en hora
+// local, el mismo formato que acepta parseLocalDateTime. Así el prefill del
+// repropose no se rompe con el sufijo de zona horaria que devuelve PostgREST.
+function formatLocalDateTime(value: string | null): string {
+    if (!value) return '';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return value;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export default function ChallengeDetailScreen() {
@@ -136,15 +165,15 @@ export default function ChallengeDetailScreen() {
         const ok = await acceptChallenge(challenge.id);
         setActionLoading(null);
         if (ok) {
-            Alert.alert('Listo', 'Desafío aceptado, el partido fue agendado.');
+            showAlert('Listo', 'Desafío aceptado, el partido fue agendado.');
             load();
         } else {
-            Alert.alert('No se pudo aceptar', 'Intentá de nuevo en unos segundos.');
+            showAlert('No se pudo aceptar', 'Intentá de nuevo en unos segundos.');
         }
     };
 
     const handleReject = async () => {
-        Alert.alert('Rechazar desafío', '¿Seguro que querés rechazar este desafío?', [
+        showAlert('Rechazar desafío', '¿Seguro que querés rechazar este desafío?', [
             { text: 'Cancelar', style: 'cancel' },
             {
                 text: 'Rechazar',
@@ -160,7 +189,7 @@ export default function ChallengeDetailScreen() {
     };
 
     const handleCancel = async () => {
-        Alert.alert('Cancelar desafío', '¿Querés cancelar este desafío?', [
+        showAlert('Cancelar desafío', '¿Querés cancelar este desafío?', [
             { text: 'No', style: 'cancel' },
             {
                 text: 'Sí, cancelar',
@@ -176,20 +205,25 @@ export default function ChallengeDetailScreen() {
     };
 
     const openRepropose = () => {
-        setNewDate(challenge.proposed_date ?? '');
+        setNewDate(formatLocalDateTime(challenge.proposed_date));
         setNewVenue(challenge.proposed_venue ?? '');
         setReproposeVisible(true);
     };
 
     const handleRepropose = async () => {
         if (!newDate || !newVenue) {
-            Alert.alert('Falta info', 'Elegí fecha y sede');
+            showAlert('Falta info', 'Elegí fecha y sede');
+            return;
+        }
+        const iso = parseLocalDateTime(newDate);
+        if (!iso) {
+            showAlert('Fecha inválida', 'Usá el formato 2026-06-20 18:00');
             return;
         }
         setActionLoading('repropose');
         const ok = await reproposeChallenge({
             challengeId: challenge.id,
-            proposedDate: newDate,
+            proposedDate: iso,
             proposedVenue: newVenue,
         });
         setActionLoading(null);
@@ -197,7 +231,7 @@ export default function ChallengeDetailScreen() {
             setReproposeVisible(false);
             load();
         } else {
-            Alert.alert('No se pudo actualizar', 'Intentá de nuevo.');
+            showAlert('No se pudo actualizar', 'Intentá de nuevo.');
         }
     };
 
@@ -217,7 +251,7 @@ export default function ChallengeDetailScreen() {
             >
                 <Card style={styles.playersCard}>
                     <View style={styles.playerCol}>
-                        <Avatar uri={me?.avatar_url ?? null} size={64} online={false} />
+                        <Avatar uri={me?.avatar_url ?? null} size={64} online={isActuallyOnline(me)} />
                         <Text style={styles.playerName}>{me?.full_name ?? 'Vos'}</Text>
                         <Text style={styles.playerLevel}>{me?.level}</Text>
                     </View>
@@ -228,7 +262,7 @@ export default function ChallengeDetailScreen() {
                     </View>
 
                     <View style={styles.playerCol}>
-                        <Avatar uri={rival?.avatar_url ?? null} size={64} online={false} />
+                        <Avatar uri={rival?.avatar_url ?? null} size={64} online={isActuallyOnline(rival)} />
                         <Text style={styles.playerName}>{rival?.full_name ?? 'Rival'}</Text>
                         <Text style={styles.playerLevel}>{rival?.level}</Text>
                     </View>

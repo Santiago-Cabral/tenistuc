@@ -4,6 +4,7 @@ import {
     StyleSheet, KeyboardAvoidingView, Platform,
     Alert, ActivityIndicator,
 } from 'react-native';
+import { showAlert } from '../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -51,7 +52,7 @@ export default function EditProfileScreen() {
     const pickAndUploadPhoto = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert(
+            showAlert(
                 'Permiso requerido',
                 'Necesitamos acceso a tu galería para cambiar la foto.'
             );
@@ -100,7 +101,7 @@ export default function EditProfileScreen() {
             await updateProfile({ avatar_url: urlWithBust });
 
         } catch (e: any) {
-            Alert.alert('Error al subir foto', e.message ?? 'Intentá de nuevo');
+            showAlert('Error al subir foto', e.message ?? 'Intentá de nuevo');
         } finally {
             setUploadingPhoto(false);
         }
@@ -110,7 +111,7 @@ export default function EditProfileScreen() {
 
     const handleSave = async () => {
         if (!fullName.trim() || !username.trim()) {
-            Alert.alert('Campos requeridos', 'Nombre y usuario son obligatorios.');
+            showAlert('Campos requeridos', 'Nombre y usuario son obligatorios.');
             return;
         }
         setSaving(true);
@@ -125,7 +126,7 @@ export default function EditProfileScreen() {
             });
             router.back();
         } catch (e: any) {
-            Alert.alert('Error', e.message ?? 'No se pudo guardar');
+            showAlert('Error', e.message ?? 'No se pudo guardar');
         } finally {
             setSaving(false);
         }

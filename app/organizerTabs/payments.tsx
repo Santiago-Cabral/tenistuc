@@ -4,6 +4,7 @@ import {
     View, Text, FlatList, TouchableOpacity, StyleSheet,
     ActivityIndicator, RefreshControl, Alert,
 } from 'react-native';
+import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,11 +14,16 @@ import { useAuthStore } from '../../src/stores/authStore';
 import {
     getPayments, markPaymentStatus, PendingPayment,
 } from '../../src/services/organizerService';
+import { notifyUser } from '../../src/services/notificationService';
 
 type FilterKey = 'all' | 'pending' | 'paid';
 
 function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString('es', { day: '2-digit', month: 'short' });
+}
+
+function formatMoney(n: number | null | undefined) {
+    return `$${Number(n ?? 0).toLocaleString('es-AR')}`;
 }
 
 export default function PaymentsScreen() {
@@ -33,6 +39,8 @@ export default function PaymentsScreen() {
         try {
             const data = await getPayments(profile.id);
             setPayments(data);
+        } catch (e) {
+            console.warn('[payments] no se pudieron cargar los pagos:', e);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -54,7 +62,10 @@ export default function PaymentsScreen() {
     const pendingTotal = payments.filter((p) => p.payment_status === 'pending').length;
     const collectedTotal = payments
         .filter((p) => p.payment_status === 'paid')
-        .reduce((sum, p) => sum + p.entry_fee, 0);
+        .reduce((sum, p) => sum + (p.paid_amount ?? p.entry_fee), 0);
+    const commissionTotal = payments
+        .filter((p) => p.payment_status === 'paid')
+        .reduce((sum, p) => sum + (p.commission_amount ?? 0), 0);
 
     const togglePayment = async (item: PendingPayment) => {
         const nextStatus = item.payment_status === 'paid' ? 'pending' : 'paid';
@@ -63,13 +74,55 @@ export default function PaymentsScreen() {
         setPayments((prev) => prev.map((p) => (p.id === item.id ? { ...p, payment_status: nextStatus } : p)));
         try {
             await markPaymentStatus(item.id, nextStatus);
+
+            // avisamos al jugador cuando se confirma su pago (manual/efectivo)
+            if (nextStatus === 'paid') {
+                try {
+                    await notifyUser({
+                        userId: item.player_id,
+                        type: 'tournament_registration',
+                        title: 'Inscripción confirmada',
+                        body: `Tu pago fue registrado en ${item.tournament_name}. ¡Nos vemos en la cancha!`,
+                        relatedId: item.tournament_id,
+                    });
+                } catch {
+                    // el flujo principal no debe romperse si el push falla
+                }
+            }
         } catch (e: any) {
             // revertir si falla
             setPayments((prev) => prev.map((p) => (p.id === item.id ? { ...p, payment_status: item.payment_status } : p)));
-            Alert.alert('No se pudo actualizar', e.message ?? 'Intentá de nuevo');
+            showAlert('No se pudo actualizar', e.message ?? 'Intentá de nuevo');
         } finally {
             setUpdatingId(null);
         }
+    };
+
+    const notifyPlayer = (item: PendingPayment) => {
+        showAlert(
+            'Enviar aviso',
+            `¿Avisar a ${item.player_name} sobre "${item.tournament_name}"?`,
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Enviar',
+                    onPress: async () => {
+                        try {
+                            await notifyUser({
+                                userId: item.player_id,
+                                type: 'tournament_update',
+                                title: 'Aviso del organizador',
+                                body: `Consultá las novedades del torneo "${item.tournament_name}" en la app.`,
+                                relatedId: item.tournament_id,
+                            });
+                            showAlert('Listo', 'Aviso enviado.');
+                        } catch (e: any) {
+                            showAlert('No se pudo enviar', e.message ?? 'Intentá de nuevo');
+                        }
+                    },
+                },
+            ],
+        );
     };
 
     return (
@@ -77,7 +130,8 @@ export default function PaymentsScreen() {
             <View style={styles.header}>
                 <Text style={styles.title}>Cobros</Text>
                 <Text style={styles.subtitle}>
-                    {pendingTotal} pendiente{pendingTotal !== 1 ? 's' : ''} · ${collectedTotal.toLocaleString('es-AR')} cobrado
+                    {pendingTotal} pendiente{pendingTotal !== 1 ? 's' : ''} · {formatMoney(collectedTotal)} cobrado
+                    {commissionTotal > 0 ? ` · comisión tenistuc ${formatMoney(commissionTotal)}` : ''}
                 </Text>
             </View>
 
@@ -122,9 +176,21 @@ export default function PaymentsScreen() {
                                     <Text style={styles.rowMeta} numberOfLines={1}>
                                         {p.tournament_name} · {formatDate(p.registered_at)}
                                     </Text>
+                                    {isPaid && p.commission_amount ? (
+                                        <Text style={[styles.rowMeta, { color: Colors.tertiary }]}>
+                                            comisión tenistuc {formatMoney(p.commission_amount)}
+                                        </Text>
+                                    ) : null}
                                 </View>
                                 <View style={styles.rowRight}>
-                                    <Text style={styles.rowFee}>${p.entry_fee}</Text>
+                                    <Text style={styles.rowFee}>{formatMoney(p.entry_fee)}</Text>
+                                    <TouchableOpacity
+                                        style={styles.notifyBtn}
+                                        onPress={() => notifyPlayer(p)}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
+                                        <Ionicons name="notifications-outline" size={16} color={Colors.primary} />
+                                    </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[styles.statusBtn, isPaid ? styles.statusBtnPaid : styles.statusBtnPending]}
                                         onPress={() => togglePayment(p)}
@@ -193,6 +259,11 @@ const styles = StyleSheet.create({
     rowMeta: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
     rowRight: { alignItems: 'flex-end', gap: 6 },
     rowFee: { fontFamily: 'Lexend_600SemiBold', fontSize: 14, color: Colors.onSurface },
+    notifyBtn: {
+        width: 28, height: 28, borderRadius: 14,
+        backgroundColor: `${Colors.primary}14`,
+        alignItems: 'center', justifyContent: 'center',
+    },
     statusBtn: {
         flexDirection: 'row', alignItems: 'center', gap: 4,
         paddingHorizontal: Spacing.sm, paddingVertical: 4,

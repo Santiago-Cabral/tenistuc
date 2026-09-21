@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
+import { showAlert } from '../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing } from '../src/theme/index';
@@ -15,7 +16,7 @@ export default function ForgotPasswordScreen() {
     const [sent, setSent] = useState(false);
 
     const handleReset = async () => {
-        if (!email) { Alert.alert('Error', 'Ingresá tu email'); return; }
+        if (!email) { showAlert('Error', 'Ingresá tu email'); return; }
         setLoading(true);
         try {
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -24,7 +25,7 @@ export default function ForgotPasswordScreen() {
             if (error) throw error;
             setSent(true);
         } catch (e: any) {
-            Alert.alert('Error', e.message ?? 'No se pudo enviar el email');
+            showAlert('Error', e.message ?? 'No se pudo enviar el email');
         } finally {
             setLoading(false);
         }

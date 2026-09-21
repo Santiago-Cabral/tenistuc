@@ -13,6 +13,8 @@ export interface ChallengeProfile {
     avatar_url: string | null;
     elo: number;
     level: string;
+    is_online?: boolean;
+    last_seen?: string | null;
 }
 
 export interface Challenge {
@@ -45,7 +47,7 @@ export interface ReproposePayload {
     proposedVenue?: string | null;
 }
 
-const PROFILE_FIELDS = 'id, full_name, username, avatar_url, elo, level';
+const PROFILE_FIELDS = 'id, full_name, username, avatar_url, elo, level, is_online, last_seen';
 
 const CHALLENGE_SELECT = `
   *,

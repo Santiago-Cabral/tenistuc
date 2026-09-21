@@ -1,5 +1,5 @@
 # TenisTuc — Supabase config (tenistuc_final)
-# La edge function vive en src/supabase/functions/notify
+# Las edge functions viven en src/supabase/functions/
 # IMPORTANTE: correr los comandos del CLI desde la carpeta `src/supabase`
 #   Ej:  cd src/supabase   →   npx supabase functions deploy notify
 
@@ -7,3 +7,21 @@ project_id = "qodajlsxihukgfdvntjy"
 
 [functions.notify]
 verify_jwt = false
+
+# webhook que llama MercadoPago (sin JWT, validado por el propio MP)
+[functions.mp-webhook]
+verify_jwt = false
+
+# el organizador la abre: devuelve la URL de autorización OAuth
+[functions.mp-oauth-url]
+verify_jwt = true
+
+# redirige el navegador: intercambia el code por los tokens del seller
+[functions.mp-oauth-callback]
+verify_jwt = false
+
+[functions.create-mp-preference]
+verify_jwt = true
+
+[functions.check-mp-payment]
+verify_jwt = true

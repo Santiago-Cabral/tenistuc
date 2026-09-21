@@ -57,6 +57,8 @@ create table if not exists public.profiles (
     is_online         boolean not null default false,
     last_seen         timestamptz,
     expo_push_token   text,
+    privacy_consented_at timestamptz,
+    privacy_policy_version text,
     created_at        timestamptz not null default now()
 );
 
@@ -168,7 +170,7 @@ create table if not exists public.tournaments (
     name            text not null,
     description     text,
     status          text not null default 'open'
-                    check (status in ('upcoming', 'open', 'in_progress', 'completed')),
+                    check (status in ('upcoming', 'open', 'closed', 'in_progress', 'completed')),
     category        text,
     format          text check (format in ('elimination', 'round_robin', 'swiss')),
     image_url       text,
@@ -218,6 +220,13 @@ create table if not exists public.tournament_registrations (
     payment_status text not null default 'pending'
                    check (payment_status in ('pending', 'paid', 'refunded')),
     registered_at  timestamptz not null default now(),
+    -- MercadoPago (pago de la inscripción)
+    mp_preference_id   text,
+    mp_payment_id      text,
+    mp_status          text check (mp_status in ('pending', 'approved', 'rejected', 'cancelled', 'in_process', 'expired')),
+    paid_amount        numeric(10, 2),
+    commission_amount  numeric(10, 2),
+    paid_at            timestamptz,
     constraint tournament_registrations_unique unique (tournament_id, player_id)
 );
 
@@ -260,6 +269,197 @@ create table if not exists public.notifications (
 );
 
 create index if not exists idx_notifications_user on public.notifications (user_id, created_at desc);
+
+-- ──────────────────────────────────────────────────────────────
+-- 12b) CUENTAS MERCADOPAGO DE ORGANIZADORES (modo marketplace)
+--    Conexión OAuth: la edge function `mp-oauth-callback` intercambia
+--    el code por tokens y guarda acá con service_role.
+--    SIN RLS policies: el cliente NUNCA ve los tokens. El estado
+--    (si está conectado) se consulta vía la RPC get_my_mp_status.
+-- ──────────────────────────────────────────────────────────────
+create table if not exists public.organizer_mp_accounts (
+    organizer_id  uuid primary key references public.profiles (id) on delete cascade,
+    mp_user_id    text not null,
+    access_token  text not null,
+    refresh_token text,
+    public_key    text,
+    connected_at  timestamptz not null default now(),
+    updated_at    timestamptz not null default now()
+);
+
+alter table public.organizer_mp_accounts enable row level security;
+
+-- estados OAuth de un solo uso (CSRF/vinculación) creados por mp-oauth-url
+create table if not exists public.mp_oauth_states (
+    state        uuid primary key default gen_random_uuid(),
+    organizer_id uuid not null references public.profiles (id) on delete cascade,
+    created_at   timestamptz not null default now()
+);
+
+alter table public.mp_oauth_states enable row level security;
+
+-- ──────────────────────────────────────────────────────────────
+-- 12c) RPC notify_user: inserta una notificación in-app PARA OTRO USUARIO.
+--    El push expo best-effort lo manda el cliente (notificationService)
+--    igual que hacía notifyUser() antes.
+--    Restricciones de seguridad:
+--      - solo usuarios autenticados
+--      - si el destino es otro usuario, el emisor debe ser organizer
+--        y (si hay related_id = torneo) dueño de ese torneo
+-- ──────────────────────────────────────────────────────────────
+create or replace function public.notify_user(
+    p_user_id uuid,
+    p_type    text,
+    p_title   text,
+    p_body    text,
+    p_data    jsonb default null,
+    p_related_id uuid default null
+)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+    v_emitter uuid := auth.uid();
+    v_is_organizer boolean;
+    v_owns_tournament boolean;
+    v_target_role text;
+begin
+    if v_emitter is null then
+        return false;
+    end if;
+
+    select role into v_target_role from public.profiles where id = p_user_id;
+    if v_target_role is null then
+        return false;
+    end if;
+
+    -- si no es hacia sí mismo, requiere ser organizer
+    if p_user_id <> v_emitter then
+        select exists (
+            select 1 from public.profiles where id = v_emitter and role = 'organizer'
+        ) into v_is_organizer;
+
+        if not v_is_organizer then
+            return false;
+        end if;
+
+        -- si apunta a un torneo, debe ser el dueño
+        if p_related_id is not null then
+            select exists (
+                select 1 from public.tournaments t
+                where t.id = p_related_id and t.organizer_id = v_emitter
+            ) into v_owns_tournament;
+            if not v_owns_tournament then
+                return false;
+            end if;
+        end if;
+    end if;
+
+    insert into public.notifications (user_id, type, title, body, data, related_id)
+    values (p_user_id, p_type, p_title, p_body, p_data, p_related_id);
+
+    return true;
+end;
+$$;
+
+revoke execute on function public.notify_user(uuid, text, text, text, jsonb, uuid) from public;
+grant execute on function public.notify_user(uuid, text, text, text, jsonb, uuid) to authenticated;
+
+-- ──────────────────────────────────────────────────────────────
+-- 12d) RPCs para que el organizer vea/desconecte su cuenta MP
+-- ──────────────────────────────────────────────────────────────
+create or replace function public.get_my_mp_status()
+returns table (connected boolean, mp_user_id text, connected_at timestamptz)
+language sql
+security definer set search_path = public
+as $$
+    select
+        exists (
+            select 1 from public.organizer_mp_accounts
+            where organizer_id = auth.uid()
+        ) as connected,
+        (
+            select mp_user_id from public.organizer_mp_accounts
+            where organizer_id = auth.uid()
+        ) as mp_user_id,
+        (
+            select connected_at from public.organizer_mp_accounts
+            where organizer_id = auth.uid()
+        ) as connected_at;
+$$;
+
+revoke execute on function public.get_my_mp_status() from public;
+grant execute on function public.get_my_mp_status() to authenticated;
+
+create or replace function public.disconnect_mp()
+returns void
+language sql
+security definer set search_path = public
+as $$
+    delete from public.organizer_mp_accounts where organizer_id = auth.uid();
+$$;
+
+revoke execute on function public.disconnect_mp() from public;
+grant execute on function public.disconnect_mp() to authenticated;
+
+-- ──────────────────────────────────────────────────────────────
+-- 12e) RPC delete_account: ELIMINA DEFINITIVAMENTE la cuenta, el
+-- perfil y todos sus datos (cascada via FK de public.profiles).
+-- Irreversible.
+-- ──────────────────────────────────────────────────────────────
+create or replace function public.delete_account()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    if auth.uid() is null then
+        raise exception 'No autenticado';
+    end if;
+    delete from auth.users where id = auth.uid();
+end;
+$$;
+
+revoke execute on function public.delete_account() from public;
+grant execute on function public.delete_account() to authenticated;
+
+-- ──────────────────────────────────────────────────────────────
+-- 12f) TRIGGER: bloquear inscripción si la lista está cerrada o con cupo lleno
+-- ──────────────────────────────────────────────────────────────
+create or replace function public.enforce_registration_open()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+    t public.tournaments%rowtype;
+    v_count integer;
+begin
+    select * into t from public.tournaments where id = new.tournament_id;
+
+    if t.status <> 'open' then
+        raise exception 'La inscripción para este torneo está cerrada';
+    end if;
+
+    if t.max_players is not null and t.max_players > 0 then
+        select count(*) into v_count
+        from public.tournament_registrations
+        where tournament_id = new.tournament_id;
+        if v_count >= t.max_players then
+            raise exception 'El torneo alcanzó su cupo máximo';
+        end if;
+    end if;
+
+    return new;
+end;
+$$;
+
+drop trigger if exists trg_enforce_registration_open on public.tournament_registrations;
+create trigger trg_enforce_registration_open
+    before insert on public.tournament_registrations
+    for each row execute procedure public.enforce_registration_open();
 
 -- ──────────────────────────────────────────────────────────────
 -- 13) STORAGE: bucket público "avatars"
@@ -456,13 +656,59 @@ create policy "Users can update their notifications" on public.notifications
     for update using (user_id = auth.uid());
 
 -- ──────────────────────────────────────────────────────────────
--- 15) REALTIME: habilitar broadcast en tablas que la app escucha
+-- 14b) ALTERS PARA BASES EXISTENTES (idempotentes)
+--   Solo necesita correrlos quien ya tenía el esquema previo.
+-- ──────────────────────────────────────────────────────────────
+alter table public.tournaments
+    drop constraint if exists tournaments_status_check;
+alter table public.tournaments
+    add constraint tournaments_status_check
+    check (status in ('upcoming', 'open', 'closed', 'in_progress', 'completed'));
+
+alter table public.tournament_registrations
+    add column if not exists mp_preference_id   text,
+    add column if not exists mp_payment_id      text,
+    add column if not exists mp_status          text,
+    add column if not exists paid_amount        numeric(10, 2),
+    add column if not exists commission_amount  numeric(10, 2),
+    add column if not exists paid_at            timestamptz;
+
+-- consentimiento de políticas de privacidad (aceptado al registrarse/ingresar)
+alter table public.profiles
+    add column if not exists privacy_consented_at timestamptz,
+    add column if not exists privacy_policy_version text;
+
+-- ──────────────────────────────────────────────────────────────
+-- 15) WEBHOOKS DEL DASHBOARD (configurar en Database → Webhooks)
+--    La edge function `notify` recibe evento por evento. Configurar:
+--      · challenges              INSERT              → /functions/v1/notify
+--      · tournaments             INSERT, UPDATE      → /functions/v1/notify
+--      · tournament_registrations INSERT, UPDATE     → /functions/v1/notify
+--      · messages                INSERT              → /functions/v1/notify
+--    Todas con header  Authorization: Bearer NOTIFY_SECRET
+--    (el mismo valor que la variable NOTIFY_SECRET de la edge function).
+-- ──────────────────────────────────────────────────────────────
+-- 16) REALTIME: habilitar broadcast en tablas que la app escucha
 --     (se puede verificar/marcar también en Dashboard → Database → Replication)
 -- ──────────────────────────────────────────────────────────────
 -- Realtime para los canales que usa supabase-js (postgres_changes):
---   messages, conversations, notifications
+--   messages, conversations, notifications, profiles
 -- Si usás el portal de Supabase, activá esas tablas en:
 --   Database → Replication → supabase_realtime → tabla toggle
+
+-- CORRER ESTO ABOJO/O EN EL SQL EDITOR si profiles aún no está en
+-- la publicación supabase_realtime (la presencia en vivo lo necesita):
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'profiles'
+  ) then
+    alter publication supabase_realtime add table public.profiles;
+  end if;
+end $$;
 
 -- ──────────────────────────────────────────────────────────────
 -- LISTO ✅

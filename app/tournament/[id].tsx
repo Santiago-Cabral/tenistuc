@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
+import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
@@ -11,6 +12,7 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '../../src/theme/ind
 import { Badge, Avatar, Button, Card, SectionHeader } from '../../src/components/ui';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthStore } from '../../src/stores/authStore';
+import { createMpPreference, openCheckout, checkPayment } from '../../src/services/paymentsService';
 
 export default function TournamentDetailScreen() {
     const router = useRouter();
@@ -18,8 +20,19 @@ export default function TournamentDetailScreen() {
     const { profile } = useAuthStore();
     const [tournament, setTournament] = useState<any>(null);
     const [registrations, setRegistrations] = useState<any[]>([]);
-    const [isRegistered, setIsRegistered] = useState(false);
+    const [myRegistration, setMyRegistration] = useState<any>(null);
     const [joining, setJoining] = useState(false);
+
+    const refreshMyRegistration = async () => {
+        if (!profile || !id) return;
+        const { data } = await supabase
+            .from('tournament_registrations')
+            .select('*')
+            .eq('tournament_id', id)
+            .eq('player_id', profile.id)
+            .maybeSingle();
+        setMyRegistration(data ?? null);
+    };
 
     useEffect(() => {
         if (!id) return;
@@ -33,24 +46,73 @@ export default function TournamentDetailScreen() {
             .order('registered_at', { ascending: false })
             .then(({ data }) => { if (data) setRegistrations(data); });
 
-        if (profile) {
-            supabase.from('tournament_registrations')
-                .select('id').eq('tournament_id', id).eq('player_id', profile.id).single()
-                .then(({ data }) => setIsRegistered(!!data));
-        }
+        refreshMyRegistration();
     }, [id, profile]);
 
     const handleJoin = async () => {
         if (!profile || !tournament) return;
+        if (tournament.status !== 'open') {
+            showAlert('Lista cerrada', 'La inscripción para este torneo está cerrada.');
+            return;
+        }
         setJoining(true);
         try {
-            const { error } = await supabase.from('tournament_registrations')
-                .insert({ tournament_id: tournament.id, player_id: profile.id });
-            if (error) throw error;
-            setIsRegistered(true);
-            Alert.alert('¡Inscripto!', `Estás inscripto en ${tournament.name}`);
+            if (Number(tournament.entry_fee) > 0) {
+                // Inscripción con pago vía MercadoPago
+                const pref = await createMpPreference(tournament.id);
+                await refreshMyRegistration();
+
+                if (pref.already_paid) {
+                    showAlert('¡Inscripto!', `Ya estabas inscripto en ${tournament.name}`);
+                    return;
+                }
+                if (!pref.init_point) throw new Error('No se pudo iniciar el pago');
+
+                await openCheckout(pref.init_point);
+
+                // al volver del checkout verificamos el estado (idempotente)
+                const status = await checkPayment(tournament.id);
+                await refreshMyRegistration();
+
+                if (status === 'paid') {
+                    showAlert('¡Inscripción confirmada!', `Estás inscripto en ${tournament.name}.`);
+                } else {
+                    showAlert(
+                        'Pago en proceso',
+                        'Si ya pagaste, tu lugar se confirmará en unos segundos.'
+                    );
+                }
+            } else {
+                // Torneo gratuito
+                const { error } = await supabase.from('tournament_registrations')
+                    .insert({ tournament_id: tournament.id, player_id: profile.id });
+                if (error) throw error;
+                await refreshMyRegistration();
+                showAlert('¡Inscripto!', `Estás inscripto en ${tournament.name}`);
+            }
         } catch (e: any) {
-            Alert.alert('Error', e.message ?? 'No se pudo inscribir');
+            showAlert('Error', e.message ?? 'No se pudo completar la inscripción');
+        } finally {
+            setJoining(false);
+        }
+    };
+
+    const handlePay = async () => {
+        if (!tournament) return;
+        setJoining(true);
+        try {
+            const pref = await createMpPreference(tournament.id);
+            if (!pref.init_point) return;
+            await openCheckout(pref.init_point);
+            const status = await checkPayment(tournament.id);
+            await refreshMyRegistration();
+            if (status === 'paid') {
+                showAlert('¡Inscripción confirmada!', `Estás inscripto en ${tournament.name}.`);
+            } else {
+                showAlert('Pago en proceso', 'Si ya pagaste, tu lugar se confirmará en unos segundos.');
+            }
+        } catch (e: any) {
+            showAlert('Error', e.message ?? 'No se pudo procesar el pago');
         } finally {
             setJoining(false);
         }
@@ -58,15 +120,17 @@ export default function TournamentDetailScreen() {
 
     const statusLabel: Record<string, string> = {
         upcoming: 'PRÓXIMAMENTE', open: 'INSCRIPCIONES ABIERTAS',
-        in_progress: 'EN JUEGO', completed: 'FINALIZADO',
+        closed: 'LISTA CERRADA', in_progress: 'EN JUEGO', completed: 'FINALIZADO',
     };
     const statusColor: Record<string, string> = {
         upcoming: Colors.surfaceContainerHigh, open: Colors.primaryContainer,
-        in_progress: Colors.tertiaryContainer, completed: Colors.surfaceContainerHighest,
+        closed: Colors.tertiaryContainer, in_progress: Colors.tertiaryContainer,
+        completed: Colors.surfaceContainerHighest,
     };
     const statusTextColor: Record<string, string> = {
         upcoming: Colors.onSurfaceVariant, open: Colors.primary,
-        in_progress: Colors.tertiary, completed: Colors.onSurfaceVariant,
+        closed: Colors.tertiary, in_progress: Colors.tertiary,
+        completed: Colors.onSurfaceVariant,
     };
 
     if (!tournament) {
@@ -229,9 +293,25 @@ export default function TournamentDetailScreen() {
                     )}
 
                     {/* CTA */}
-                    {tournament.status === 'open' && (
+                    {tournament.status === 'closed' && !myRegistration ? (
                         <View style={styles.ctaSection}>
-                            {isRegistered ? (
+                            <Card style={styles.registeredCard}>
+                                <View style={styles.registeredIconWrap}>
+                                    <Ionicons name="lock-closed" size={28} color={Colors.tertiary} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.registeredTitle, { color: Colors.tertiary }]}>
+                                        Lista cerrada
+                                    </Text>
+                                    <Text style={styles.registeredSub}>
+                                        Este torneo terminó de recibir inscripciones.
+                                    </Text>
+                                </View>
+                            </Card>
+                        </View>
+                    ) : tournament.status === 'open' || myRegistration ? (
+                        <View style={styles.ctaSection}>
+                            {myRegistration?.payment_status === 'paid' ? (
                                 <Card style={styles.registeredCard}>
                                     <View style={styles.registeredIconWrap}>
                                         <Ionicons name="checkmark-circle" size={28} color={Colors.primary} />
@@ -239,25 +319,51 @@ export default function TournamentDetailScreen() {
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.registeredTitle}>¡Estás inscripto!</Text>
                                         <Text style={styles.registeredSub}>
-                                            Te avisaremos cuando comiencen los partidos.
+                                            {Number(tournament.entry_fee) > 0
+                                                ? 'Pago confirmado. Te avisaremos cuando comiencen los partidos.'
+                                                : 'Te avisaremos cuando comiencen los partidos.'}
                                         </Text>
                                     </View>
                                 </Card>
-                            ) : (
+                            ) : myRegistration && Number(tournament.entry_fee) > 0 ? (
+                                <>
+                                    <Card style={styles.registeredCard}>
+                                        <View style={styles.registeredIconWrap}>
+                                            <Ionicons name="time-outline" size={28} color={Colors.tertiary} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.registeredTitle, { color: Colors.tertiary }]}>
+                                                Falta confirmar tu pago
+                                            </Text>
+                                            <Text style={styles.registeredSub}>
+                                                Tenés un lugar reservado. Completá tu inscripción.
+                                            </Text>
+                                        </View>
+                                    </Card>
+                                    <Button
+                                        label={`CONFIRMAR PAGO — $${Number(tournament.entry_fee).toLocaleString('es')}`}
+                                        onPress={handlePay}
+                                        loading={joining}
+                                        uppercase={false}
+                                    />
+                                </>
+                            ) : tournament.status === 'open' ? (
                                 <>
                                     <Text style={styles.ctaNote}>
-                                        Quedan {tournament.max_players - registrations.length} lugares disponibles
+                                        Quedan {Math.max(tournament.max_players - registrations.length, 0)} lugares disponibles
                                     </Text>
                                     <Button
-                                        label={`INSCRIBIRSE — $${Number(tournament.entry_fee).toLocaleString('es')}`}
+                                        label={Number(tournament.entry_fee) > 0
+                                            ? `INSCRIBIRSE Y PAGAR — $${Number(tournament.entry_fee).toLocaleString('es')}`
+                                            : 'INSCRIBIRSE'}
                                         onPress={handleJoin}
                                         loading={joining}
                                         uppercase={false}
                                     />
                                 </>
-                            )}
+                            ) : null}
                         </View>
-                    )}
+                    ) : null}
                 </View>
 
                 <View style={{ height: 100 }} />

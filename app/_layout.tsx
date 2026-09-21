@@ -16,12 +16,15 @@ import {
 import { View, ActivityIndicator } from "react-native";
 import { Colors } from "../src/theme";
 import { useNotifications } from "../src/hooks/useNotifications";
+import { usePresence } from "../src/hooks/usePresence";
+import { AppAlertHost } from "../src/services/appAlert";
 
 export default function RootLayout() {
     const { initialize, initialized, session } = useAuthStore();
     const router = useRouter();
     const segments = useSegments();
     useNotifications();
+    usePresence();
 
     const [fontsLoaded] = useFonts({
         Lexend_500Medium,
@@ -62,5 +65,10 @@ export default function RootLayout() {
         );
     }
 
-    return <Stack screenOptions={{ headerShown: false }} />;
+    return (
+        <>
+            <Stack screenOptions={{ headerShown: false }} />
+            <AppAlertHost />
+        </>
+    );
 }

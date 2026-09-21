@@ -89,6 +89,59 @@ export default async function handler(req: Request) {
     }
   }
 
+  // ── LISTA CERRADA / REABIERTA ───────────────────────────────────────────────
+  else if (
+    table === 'tournaments' &&
+    type === 'UPDATE' &&
+    old_record?.status !== record.status &&
+    (record.status === 'closed' || record.status === 'open')
+  ) {
+    const { data: registrations } = await supabase
+      .from('tournament_registrations')
+      .select('player_id')
+      .eq('tournament_id', record.id)
+
+    const action =
+      record.status === 'closed'
+        ? 'cerró la lista de inscripción para'
+        : 'reabrió la lista de inscripción para'
+
+    for (const { player_id } of registrations ?? []) {
+      notifications.push({
+        user_id: player_id,
+        title: record.status === 'closed' ? 'Lista cerrada' : 'Lista reabierta',
+        body: `Se ${action} ${record.name}`,
+        data: { type: 'tournament_update', tournament_id: record.id },
+        type: 'tournament_update',
+      })
+    }
+  }
+
+  // ── NUEVO INSCRIPTO (aviso al organizador) ─────────────────────────────────
+  else if (table === 'tournament_registrations' && type === 'INSERT') {
+    const { data: player } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', record.player_id)
+      .single()
+
+    const { data: tournament } = await supabase
+      .from('tournaments')
+      .select('name, organizer_id')
+      .eq('id', record.tournament_id)
+      .single()
+
+    if (tournament && player) {
+      notifications.push({
+        user_id: tournament.organizer_id,
+        title: 'Nueva inscripción',
+        body: `${player.full_name} se inscribió en ${tournament.name}`,
+        data: { type: 'tournament_registration', tournament_id: record.tournament_id },
+        type: 'tournament_registration',
+      })
+    }
+  }
+
   // ── MENSAJE NUEVO ───────────────────────────────────────────────────────────
   else if (table === 'messages' && type === 'INSERT') {
     const { data: conv } = await supabase
@@ -134,6 +187,9 @@ export default async function handler(req: Request) {
       type: notif.type,
       title: notif.title,
       body: notif.body,
+      related_id: (notif.data.challenge_id ??
+        notif.data.tournament_id ??
+        notif.data.conversation_id) as string | null,
       data: notif.data,
     })
 

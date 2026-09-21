@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   RefreshControl, Alert, Modal, TextInput, ActivityIndicator, Platform,
 } from 'react-native';
+import { showAlert } from '../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -96,9 +97,9 @@ function ScheduleModal({ state, onClose, onSaved }: {
     }).eq('id', state.matchId);
     setSaving(false);
     if (error) {
-      Alert.alert('Error', 'No se pudo guardar la fecha.');
+      showAlert('Error', 'No se pudo guardar la fecha.');
     } else {
-      Alert.alert('Listo', 'Partido programado.', [{ text: 'OK', onPress: onSaved }]);
+      showAlert('Listo', 'Partido programado.', [{ text: 'OK', onPress: onSaved }]);
     }
   };
 
@@ -215,7 +216,7 @@ function ResultModal({ state, myId, onClose, onSubmitted }: {
 
   const handleSubmit = async () => {
     if (!winnerId) {
-      Alert.alert('Resultado inválido', 'Hay un empate en sets. Revisá los puntajes.');
+      showAlert('Resultado inválido', 'Hay un empate en sets. Revisá los puntajes.');
       return;
     }
     setSubmitting(true);
@@ -227,9 +228,9 @@ function ResultModal({ state, myId, onClose, onSubmitted }: {
     }).eq('id', state.matchId);
     setSubmitting(false);
     if (error) {
-      Alert.alert('Error', 'No se pudo guardar el resultado.');
+      showAlert('Error', 'No se pudo guardar el resultado.');
     } else {
-      Alert.alert('Resultado enviado', 'Tu rival recibirá una notificación para confirmar.',
+      showAlert('Resultado enviado', 'Tu rival recibirá una notificación para confirmar.',
         [{ text: 'OK', onPress: onSubmitted }]);
     }
   };
@@ -342,16 +343,16 @@ function ConfirmResultModal({ state, myId, onClose, onResolved }: {
     }).eq('id', state.matchId);
     setLoading(false);
     if (error) {
-      Alert.alert('Error', 'No se pudo confirmar el resultado.');
+      showAlert('Error', 'No se pudo confirmar el resultado.');
     } else {
-      Alert.alert('Resultado confirmado', 'El partido quedó registrado.',
+      showAlert('Resultado confirmado', 'El partido quedó registrado.',
         [{ text: 'OK', onPress: onResolved }]);
     }
   };
 
   const handleDispute = async () => {
     if (!disputeReason.trim()) {
-      Alert.alert('Motivo requerido', 'Explicá brevemente por qué disputás el resultado.');
+      showAlert('Motivo requerido', 'Explicá brevemente por qué disputás el resultado.');
       return;
     }
     setLoading(true);
@@ -361,9 +362,9 @@ function ConfirmResultModal({ state, myId, onClose, onResolved }: {
     }).eq('id', state.matchId);
     setLoading(false);
     if (error) {
-      Alert.alert('Error', 'No se pudo disputar el resultado.');
+      showAlert('Error', 'No se pudo disputar el resultado.');
     } else {
-      Alert.alert('Resultado disputado', 'El partido volvió a estado pendiente.',
+      showAlert('Resultado disputado', 'El partido volvió a estado pendiente.',
         [{ text: 'OK', onPress: onResolved }]);
     }
   };
@@ -526,19 +527,19 @@ export default function MatchesScreen() {
     const convId = await getOrCreateConversation(profile.id, opponentId);
     setLoadingId(null);
     if (convId) router.push(`/chat/${convId}` as any);
-    else Alert.alert('Error', 'No se pudo abrir el chat.');
+    else showAlert('Error', 'No se pudo abrir el chat.');
   };
 
   const confirmMatch = async (matchId: string) => {
     setLoadingId(matchId);
     const { error } = await supabase.from('matches').update({ status: 'confirmed' }).eq('id', matchId);
     setLoadingId(null);
-    if (error) Alert.alert('Error', 'No se pudo confirmar el partido.');
+    if (error) showAlert('Error', 'No se pudo confirmar el partido.');
     else loadData();
   };
 
   const cancelMatch = (matchId: string) => {
-    Alert.alert('Rechazar partido', '¿Estás seguro?', [
+    showAlert('Rechazar partido', '¿Estás seguro?', [
       { text: 'No', style: 'cancel' },
       {
         text: 'Sí, rechazar', style: 'destructive',
@@ -572,14 +573,14 @@ export default function MatchesScreen() {
       await supabase.from('challenges').update({ status: 'accepted', match_id: match.id }).eq('id', c.id);
       loadData();
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'No se pudo aceptar el reto.');
+      showAlert('Error', e.message ?? 'No se pudo aceptar el reto.');
     } finally {
       setLoadingId(null);
     }
   };
 
   const rejectChallenge = (challengeId: string) => {
-    Alert.alert('Rechazar reto', '¿Estás seguro?', [
+    showAlert('Rechazar reto', '¿Estás seguro?', [
       { text: 'No', style: 'cancel' },
       {
         text: 'Sí, rechazar', style: 'destructive',

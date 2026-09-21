@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { presenceService } from '../services/presenceService';
 
 export interface Profile {
     id: string;
@@ -30,6 +31,8 @@ export interface Profile {
     bio: string | null;
     is_online: boolean;
     last_seen: string;
+    privacy_consented_at: string | null;
+    privacy_policy_version: string | null;
     created_at: string;
 }
 
@@ -50,6 +53,8 @@ interface AuthState {
     signOut: () => Promise<void>;
     fetchProfile: () => Promise<void>;
     updateProfile: (updates: Partial<Profile>) => Promise<void>;
+    recordPrivacyConsent: () => Promise<void>;
+    deleteAccount: () => Promise<void>;
 }
 
 let authSubscription: { unsubscribe: () => void } | null = null;
@@ -107,6 +112,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 
     signOut: async () => {
+        const { profile } = get();
+        if (profile?.id) {
+            presenceService.markOffline(profile.id).catch(() => {});
+        }
         await supabase.auth.signOut();
         set({ session: null, profile: null });
     },
@@ -144,5 +153,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         if (error) throw error;
         set({ profile: data as Profile });
+    },
+
+    recordPrivacyConsent: async () => {
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+        if (!user) return;
+
+        const { data, error } = await supabase
+            .from('profiles')
+            .update({
+                privacy_consented_at: new Date().toISOString(),
+                privacy_policy_version: '1.0',
+            })
+            .eq('id', user.id)
+            .select()
+            .single();
+
+        if (error) {
+            console.warn('[authStore] recordPrivacyConsent error:', error.message);
+            return;
+        }
+        set({ profile: data as Profile });
+    },
+
+    deleteAccount: async () => {
+        const { error } = await supabase.rpc('delete_account');
+        if (error) throw error;
+        const { profile } = get();
+        if (profile?.id) {
+            presenceService.markOffline(profile.id).catch(() => {});
+        }
+        await supabase.auth.signOut();
+        set({ session: null, profile: null });
     },
 }));

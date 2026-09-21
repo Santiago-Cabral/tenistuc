@@ -4,6 +4,7 @@ import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
+import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -109,7 +110,7 @@ export default function FixtureScreen() {
             .from('tournaments')
             .select('id, name, status')
             .eq('organizer_id', profile.id)
-            .in('status', ['open', 'in_progress', 'completed'])
+            .in('status', ['open', 'closed', 'in_progress', 'completed'])
             .order('starts_at', { ascending: false });
 
         if (!error && data) {
@@ -124,7 +125,7 @@ export default function FixtureScreen() {
             const grouped = await getFixture(tournamentId);
             setRounds(grouped);
         } catch (e: any) {
-            Alert.alert('Error', e.message ?? 'No se pudo cargar el fixture.');
+            showAlert('Error', e.message ?? 'No se pudo cargar el fixture.');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -148,14 +149,14 @@ export default function FixtureScreen() {
         setGenerating(true);
         try {
             const result = await generateFixture(selectedTournament.id, profile.id);
-            Alert.alert(
+            showAlert(
                 'Fixture generado',
                 `Cuadro de ${result.bracketSize} lugares, ${result.totalRounds} rondas` +
                 (result.byes > 0 ? `, ${result.byes} bye(s) para los mejores seeds.` : '.'),
             );
             loadFixture(selectedTournament.id);
         } catch (e: any) {
-            Alert.alert('No se pudo generar', e.message ?? 'Intentá de nuevo');
+            showAlert('No se pudo generar', e.message ?? 'Intentá de nuevo');
         } finally {
             setGenerating(false);
         }

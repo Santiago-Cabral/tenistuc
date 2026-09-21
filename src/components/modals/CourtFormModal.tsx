@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
     View, Text, Modal, TouchableOpacity, StyleSheet, TextInput, Alert, Switch,
 } from 'react-native';
+import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import {
@@ -62,7 +63,7 @@ export default function CourtFormModal({
 
     const handleSubmit = async () => {
         if (!name.trim()) {
-            Alert.alert('Falta info', 'Ponele un nombre a la cancha.');
+            showAlert('Falta info', 'Ponele un nombre a la cancha.');
             return;
         }
 
@@ -84,7 +85,7 @@ export default function CourtFormModal({
             reset();
             onSaved();
         } catch (e: any) {
-            Alert.alert('No se pudo guardar', e.message ?? 'Intentá de nuevo');
+            showAlert('No se pudo guardar', e.message ?? 'Intentá de nuevo');
         } finally {
             setLoading(false);
         }

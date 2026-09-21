@@ -6,6 +6,7 @@ import {
     View, Text, ScrollView, TouchableOpacity, StyleSheet,
     TextInput, Platform, Alert, ActivityIndicator, KeyboardAvoidingView,
 } from 'react-native';
+import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -101,14 +102,14 @@ export default function ChallengeRespondScreen() {
     const handleAccept = async () => {
         const ok = await acceptChallenge(challenge.id);
         if (ok) {
-            Alert.alert('Reto aceptado', `Ya está cargado en tus partidos.`, [
+            showAlert('Reto aceptado', `Ya está cargado en tus partidos.`, [
                 { text: 'OK', onPress: () => router.back() },
             ]);
         }
     };
 
     const handleReject = async () => {
-        Alert.alert('Rechazar reto', '¿Seguro que querés rechazar este reto?', [
+        showAlert('Rechazar reto', '¿Seguro que querés rechazar este reto?', [
             { text: 'Cancelar', style: 'cancel' },
             {
                 text: 'Rechazar', style: 'destructive',
@@ -130,7 +131,7 @@ export default function ChallengeRespondScreen() {
         if (ok) {
             setEditing(false);
             await loadChallenge();
-            Alert.alert('Propuesta actualizada', `Le avisamos a ${other?.full_name} sobre el cambio.`);
+            showAlert('Propuesta actualizada', `Le avisamos a ${other?.full_name} sobre el cambio.`);
         }
     };
 

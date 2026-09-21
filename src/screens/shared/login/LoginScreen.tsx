@@ -3,23 +3,33 @@ import {
     View, Text, StyleSheet, Alert,
     KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity,
 } from 'react-native';
+import { showAlert } from '../../../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, Typography, Spacing, Radius } from '../../../theme/index';
-import { Button, InputField } from '../../../components/ui/index';
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../../theme/index';
+import { Button, InputField, PrivacyConsent } from '../../../components/ui/index';
 import { useAuthStore } from '../../../stores/authStore';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
     const router = useRouter();
     const { signIn } = useAuthStore();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [consent, setConsent] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert('Error', 'Completá todos los campos');
+            showAlert('Error', 'Completá todos los campos');
+            return;
+        }
+        if (!EMAIL_REGEX.test(email.trim())) {
+            showAlert('Error', 'Ingresá un email válido');
             return;
         }
         setLoading(true);
@@ -27,10 +37,30 @@ export default function LoginScreen() {
             await signIn(email.trim().toLowerCase(), password);
             // AuthGuard redirige automáticamente a /(tabs)
         } catch (e: any) {
-            Alert.alert('Error al iniciar sesión', e.message ?? 'Credenciales inválidas');
+            showAlert('Error al iniciar sesión', e.message ?? 'Credenciales inválidas');
         } finally {
             setLoading(false);
         }
+    };
+
+    // TODO: conectá acá el flujo OAuth (ya está instalado expo-auth-session):
+    //   const { url } = await supabase.auth.signInWithOAuth({ provider: 'google', redirectTo: ... })
+    //   abrí url con WebBrowser y completá la sesión (exchangeCodeForSession).
+    const handleGoogleSignIn = async () => {
+        if (!consent) {
+            showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad para usar TenisTuc.');
+            return;
+        }
+        // Vendrá con Google login
+    };
+
+    // TODO: mismo flujo que Google con provider: 'apple'.
+    const handleAppleSignIn = async () => {
+        if (!consent) {
+            showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad para usar TenisTuc.');
+            return;
+        }
+        // Vendrá con Apple login
     };
 
     return (
@@ -38,7 +68,7 @@ export default function LoginScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={{ flex: 1 }}
         >
-            <SafeAreaView style={styles.safe} edges={['top']}>
+            <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
                 <ScrollView
                     contentContainerStyle={styles.content}
                     keyboardShouldPersistTaps="handled"
@@ -51,9 +81,16 @@ export default function LoginScreen() {
                             style={styles.logoCircle}
                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                         >
-                            <Text style={styles.logoEmoji}>🎾</Text>
+                            <Image
+                                source={require('../../../../logoverde.png')}
+                                style={styles.logoImg}
+                                contentFit="contain"
+                            />
                         </LinearGradient>
-                        <Text style={styles.appName}>TENISTUC</Text>
+                        <View style={styles.brandTextCol}>
+                            <Text style={styles.appName}>TENISTUC</Text>
+                            <Text style={styles.appTagline}>Tenis en Tucumán</Text>
+                        </View>
                     </View>
 
                     {/* Title */}
@@ -63,7 +100,7 @@ export default function LoginScreen() {
                     </Text>
 
                     {/* Form */}
-                    <View style={styles.form}>
+                    <View style={styles.formCard}>
                         <InputField
                             label="Email"
                             value={email}
@@ -71,7 +108,9 @@ export default function LoginScreen() {
                             keyboardType="email-address"
                             autoCapitalize="none"
                             autoComplete="email"
+                            textContentType="emailAddress"
                             placeholder="tu@email.com"
+                            editable={!loading}
                         />
                         <InputField
                             label="Contraseña"
@@ -79,12 +118,17 @@ export default function LoginScreen() {
                             onChangeText={setPassword}
                             secureTextEntry
                             autoCapitalize="none"
+                            textContentType="password"
                             placeholder="••••••••"
+                            editable={!loading}
+                            returnKeyType="done"
+                            onSubmitEditing={handleLogin}
                         />
 
                         <TouchableOpacity
                             onPress={() => router.push('/forgot-password')}
                             style={styles.forgotBtn}
+                            disabled={loading}
                         >
                             <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
                         </TouchableOpacity>
@@ -97,6 +141,41 @@ export default function LoginScreen() {
                         loading={loading}
                         style={styles.loginBtn}
                     />
+
+                    {/* Divider */}
+                    <View style={styles.dividerRow}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>o creá tu cuenta con</Text>
+                        <View style={styles.dividerLine} />
+                    </View>
+
+                    {/* Consentimiento (solo aplica a registros nuevos vía proveedor) */}
+                    <View style={styles.consentWrap}>
+                        <PrivacyConsent checked={consent} onChange={setConsent} disabled={loading} />
+                    </View>
+
+                    {/* Social login */}
+                    <View style={styles.socialRow}>
+                        <TouchableOpacity
+                            style={[styles.socialBtn, loading && styles.socialBtnDisabled]}
+                            onPress={handleGoogleSignIn}
+                            disabled={loading}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="logo-google" size={20} color={Colors.onSurface} />
+                            <Text style={styles.socialBtnText}>Google</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.socialBtn, loading && styles.socialBtnDisabled]}
+                            onPress={handleAppleSignIn}
+                            disabled={loading}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="logo-apple" size={22} color={Colors.onSurface} />
+                            <Text style={styles.socialBtnText}>Apple</Text>
+                        </TouchableOpacity>
+                    </View>
 
                     <View style={styles.registerRow}>
                         <Text style={styles.registerText}>¿No tenés cuenta? </Text>
@@ -113,9 +192,11 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: Colors.surface },
     content: {
+        flexGrow: 1,
         paddingHorizontal: Spacing.xl,
         paddingTop: Spacing.xxl,
         paddingBottom: Spacing.xxxl,
+        justifyContent: 'center',
     },
     brandRow: {
         flexDirection: 'row',
@@ -123,23 +204,34 @@ const styles = StyleSheet.create({
         gap: Spacing.md,
         marginBottom: Spacing.xxxl,
     },
+    brandTextCol: { gap: 2 },
     logoCircle: {
-        width: 44, height: 44,
-        borderRadius: 22,
+        width: 52, height: 52,
+        borderRadius: 26,
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
+        ...Shadow.float,
     },
-    logoEmoji: { fontSize: 22 },
+    logoImg: {
+        width: 52, height: 52,
+        borderRadius: 26,
+    },
     appName: {
         fontFamily: 'Lexend_700Bold',
         fontSize: 18,
         color: Colors.onSurface,
         letterSpacing: 3,
     },
+    appTagline: {
+        ...Typography.bodySm,
+        color: Colors.onSurfaceVariant,
+        letterSpacing: 0.5,
+    },
     title: {
         fontFamily: 'Lexend_800ExtraBold',
-        fontSize: 40,
-        lineHeight: 44,
+        fontSize: 36,
+        lineHeight: 40,
         color: Colors.primary,
         letterSpacing: -1.5,
         marginBottom: Spacing.md,
@@ -150,14 +242,58 @@ const styles = StyleSheet.create({
         lineHeight: 24,
         marginBottom: Spacing.xxxl,
     },
-    form: { gap: Spacing.lg },
+    formCard: {
+        backgroundColor: Colors.surfaceContainerLowest,
+        borderRadius: Radius.xxl,
+        borderWidth: 1,
+        borderColor: Colors.surfaceContainerHigh,
+        padding: Spacing.xl,
+        gap: Spacing.lg,
+        ...Shadow.ambient,
+    },
     forgotBtn: { alignSelf: 'flex-end', marginTop: Spacing.sm },
     forgotText: {
         ...Typography.bodyMd,
         color: Colors.primary,
         fontFamily: 'PlusJakartaSans_600SemiBold',
     },
+    consentWrap: { marginTop: Spacing.lg },
     loginBtn: { marginTop: Spacing.xxl },
+    dividerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.base,
+        marginTop: Spacing.xl,
+    },
+    dividerLine: { flex: 1, height: 1, backgroundColor: Colors.outlineVariant },
+    dividerText: {
+        ...Typography.bodySm,
+        color: Colors.onSurfaceVariant,
+        letterSpacing: 0.5,
+    },
+    socialRow: {
+        flexDirection: 'row',
+        gap: Spacing.base,
+        marginTop: Spacing.lg,
+    },
+    socialBtn: {
+        flex: 1,
+        minHeight: 52,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.md,
+        backgroundColor: Colors.surfaceContainerLowest,
+        borderRadius: Radius.full,
+        borderWidth: 1,
+        borderColor: Colors.outlineVariant,
+    },
+    socialBtnDisabled: { opacity: 0.5 },
+    socialBtnText: {
+        ...Typography.labelLg,
+        color: Colors.onSurface,
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+    },
     registerRow: {
         flexDirection: 'row',
         justifyContent: 'center',

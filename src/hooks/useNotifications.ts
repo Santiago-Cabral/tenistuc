@@ -65,7 +65,9 @@ async function loadNotificationsModule() {
 function handleTap(data: Record<string, string>) {
   switch (data?.type) {
     case 'challenge':
-      router.push('/matches' as any)
+      data.challenge_id
+        ? router.push(`/challenge/${data.challenge_id}` as any)
+        : router.push('/matches' as any)
       break
     case 'tournament_new':
     case 'tournament_start':

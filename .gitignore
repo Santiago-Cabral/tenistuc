@@ -22,6 +22,15 @@ expo-export/
 .android/
 .ios/
 
+# native (generados por prebuild en CNG)
+android/
+ios/
+
+# firebase config (secretos por proyecto; no commitear)
+google-services.json
+GoogleService-Info.plist
+google-services.json.*
+
 # native
 *.orig.*
 *.jks
@@ -48,3 +57,6 @@ supabase/.env
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+
+# contexto del proyecto: NUNCA ignorar (contiene el historial para el agente)
+!CONTEXTO_PROYECTO.txt

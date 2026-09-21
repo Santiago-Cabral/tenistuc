@@ -3,6 +3,7 @@ import {
     View, Text, ScrollView, TouchableOpacity, StyleSheet,
     RefreshControl, Alert, Modal, TextInput, ActivityIndicator, Platform,
 } from 'react-native';
+import { showAlert } from '../../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -89,9 +90,9 @@ function ScheduleModal({
         try {
             setSaving(true);
             await matchesService.scheduleMatch(state.matchId, selectedDate, getFinalVenue());
-            Alert.alert('Listo', 'Partido programado.', [{ text: 'OK', onPress: onSaved }]);
+            showAlert('Listo', 'Partido programado.', [{ text: 'OK', onPress: onSaved }]);
         } catch (error: any) {
-            Alert.alert('Error', error?.message ?? 'No se pudo guardar la fecha.');
+            showAlert('Error', error?.message ?? 'No se pudo guardar la fecha.');
         } finally {
             setSaving(false);
         }
@@ -231,17 +232,17 @@ function ResultModal({
 
     const handleSubmit = async () => {
         if (!winnerId) {
-            Alert.alert('Resultado inválido', 'Hay un empate en sets. Revisá los puntajes.');
+            showAlert('Resultado inválido', 'Hay un empate en sets. Revisá los puntajes.');
             return;
         }
 
         try {
             setSubmitting(true);
             await matchesService.submitResult(state.matchId, myId, sets, winnerId);
-            Alert.alert('Resultado enviado', 'Tu rival recibirá una notificación para confirmar.',
+            showAlert('Resultado enviado', 'Tu rival recibirá una notificación para confirmar.',
                 [{ text: 'OK', onPress: onSubmitted }]);
         } catch (error: any) {
-            Alert.alert('Error', error?.message ?? 'No se pudo guardar el resultado.');
+            showAlert('Error', error?.message ?? 'No se pudo guardar el resultado.');
         } finally {
             setSubmitting(false);
         }
@@ -376,10 +377,10 @@ function ConfirmResultModal({
         try {
             setLoading(true);
             await matchesService.confirmResult(state.matchId, myId);
-            Alert.alert('Resultado confirmado', 'El partido quedó registrado.',
+            showAlert('Resultado confirmado', 'El partido quedó registrado.',
                 [{ text: 'OK', onPress: onResolved }]);
         } catch (error: any) {
-            Alert.alert('Error', error?.message ?? 'No se pudo confirmar el resultado.');
+            showAlert('Error', error?.message ?? 'No se pudo confirmar el resultado.');
         } finally {
             setLoading(false);
         }
@@ -387,17 +388,17 @@ function ConfirmResultModal({
 
     const handleDispute = async () => {
         if (!disputeReason.trim()) {
-            Alert.alert('Motivo requerido', 'Explicá brevemente por qué disputás el resultado.');
+            showAlert('Motivo requerido', 'Explicá brevemente por qué disputás el resultado.');
             return;
         }
 
         try {
             setLoading(true);
             await matchesService.disputeResult(state.matchId, myId, disputeReason);
-            Alert.alert('Resultado disputado', 'El partido volvió a estado pendiente.',
+            showAlert('Resultado disputado', 'El partido volvió a estado pendiente.',
                 [{ text: 'OK', onPress: onResolved }]);
         } catch (error: any) {
-            Alert.alert('Error', error?.message ?? 'No se pudo disputar el resultado.');
+            showAlert('Error', error?.message ?? 'No se pudo disputar el resultado.');
         } finally {
             setLoading(false);
         }
@@ -675,7 +676,7 @@ export default function MatchesScreen() {
             setChallenges(data.challenges);
         } catch (e) {
             console.log('Error loading matches', e);
-            Alert.alert('Error', 'No se pudieron cargar los partidos.');
+            showAlert('Error', 'No se pudieron cargar los partidos.');
         }
     };
 
@@ -714,9 +715,9 @@ export default function MatchesScreen() {
         try {
             const convId = await matchesService.getOrCreateConversation(profile.id, opponentId);
             if (convId) router.push(`/chat/${convId}` as any);
-            else Alert.alert('Error', 'No se pudo abrir el chat.');
+            else showAlert('Error', 'No se pudo abrir el chat.');
         } catch (e: any) {
-            Alert.alert('Error', e?.message ?? 'No se pudo abrir el chat.');
+            showAlert('Error', e?.message ?? 'No se pudo abrir el chat.');
         } finally {
             setLoadingId(null);
         }
@@ -728,14 +729,14 @@ export default function MatchesScreen() {
             await matchesService.confirmPendingMatch(matchId);
             await loadData();
         } catch (e: any) {
-            Alert.alert('Error', e?.message ?? 'No se pudo confirmar el partido.');
+            showAlert('Error', e?.message ?? 'No se pudo confirmar el partido.');
         } finally {
             setLoadingId(null);
         }
     };
 
     const cancelMatch = (matchId: string) => {
-        Alert.alert('Rechazar partido', '¿Estás seguro?', [
+        showAlert('Rechazar partido', '¿Estás seguro?', [
             { text: 'No', style: 'cancel' },
             {
                 text: 'Sí, rechazar',
@@ -746,7 +747,7 @@ export default function MatchesScreen() {
                         await matchesService.cancelMatch(matchId);
                         await loadData();
                     } catch (e: any) {
-                        Alert.alert('Error', e?.message ?? 'No se pudo rechazar el partido.');
+                        showAlert('Error', e?.message ?? 'No se pudo rechazar el partido.');
                     } finally {
                         setLoadingId(null);
                     }
@@ -762,14 +763,14 @@ export default function MatchesScreen() {
             await loadData();
             return match;
         } catch (e: any) {
-            Alert.alert('Error', e?.message ?? 'No se pudo aceptar el reto.');
+            showAlert('Error', e?.message ?? 'No se pudo aceptar el reto.');
         } finally {
             setLoadingId(null);
         }
     };
 
     const rejectChallenge = (challengeId: string) => {
-        Alert.alert('Rechazar reto', '¿Estás seguro?', [
+        showAlert('Rechazar reto', '¿Estás seguro?', [
             { text: 'No', style: 'cancel' },
             {
                 text: 'Sí, rechazar',
@@ -780,7 +781,7 @@ export default function MatchesScreen() {
                         await matchesService.rejectChallenge(challengeId);
                         await loadData();
                     } catch (e: any) {
-                        Alert.alert('Error', e?.message ?? 'No se pudo rechazar el reto.');
+                        showAlert('Error', e?.message ?? 'No se pudo rechazar el reto.');
                     } finally {
                         setLoadingId(null);
                     }
@@ -1167,9 +1168,9 @@ export default function MatchesScreen() {
                     try {
                         const convId = await matchesService.getOrCreateConversation(profile.id, opponentId);
                         if (convId) router.push(`/chat/${convId}` as any);
-                        else Alert.alert('Error', 'No se pudo abrir el chat.');
+                        else showAlert('Error', 'No se pudo abrir el chat.');
                     } catch (e: any) {
-                        Alert.alert('Error', e?.message ?? 'No se pudo abrir el chat.');
+                        showAlert('Error', e?.message ?? 'No se pudo abrir el chat.');
                     }
                 }}
             />

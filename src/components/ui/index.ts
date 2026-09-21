@@ -6,4 +6,5 @@ export { SectionHeader } from './SectionHeader';
 export { EloIndicator } from './EloIndicator';
 export { InputField } from './InputField';
 export { Chip } from './Chip';
-export { Text } from './Text';
+export { Text } from './Text';
+export { PrivacyConsent } from './PrivacyConsent';

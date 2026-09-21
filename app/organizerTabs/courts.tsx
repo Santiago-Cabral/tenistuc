@@ -4,6 +4,7 @@ import {
     View, Text, FlatList, TouchableOpacity, StyleSheet,
     ActivityIndicator, RefreshControl, Alert,
 } from 'react-native';
+import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -63,7 +64,7 @@ export default function CourtsScreen() {
     };
 
     const handleDelete = (c: Court) => {
-        Alert.alert('Eliminar cancha', `¿Eliminar "${c.name}"?`, [
+        showAlert('Eliminar cancha', `¿Eliminar "${c.name}"?`, [
             { text: 'Cancelar', style: 'cancel' },
             {
                 text: 'Eliminar',
@@ -73,7 +74,7 @@ export default function CourtsScreen() {
                         await deleteCourt(c.id);
                         load();
                     } catch (e: any) {
-                        Alert.alert('No se pudo eliminar', e.message ?? 'Intentá de nuevo');
+                        showAlert('No se pudo eliminar', e.message ?? 'Intentá de nuevo');
                     }
                 },
             },

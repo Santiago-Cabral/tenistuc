@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase'
 // try/catch. Por eso se detecta el entorno ANTES de importar y se corta ahí.
 
 export function isPushAvailable(): boolean {
+  if (Platform.OS === 'web') return false
   const inExpoGo = Constants.executionEnvironment === 'storeClient'
   return !(Platform.OS === 'android' && inExpoGo)
 }
@@ -96,8 +97,15 @@ export async function registerForPushNotifications(): Promise<string | null> {
     return null
   }
 
-  const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId })
-  return token
+  try {
+    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId })
+    return token
+  } catch (e: any) {
+    // Android + dev build sin FCM configurado: getExpoPushTokenAsync tira
+    // "Unable to get Firebase Messaging instance". No debe romper la app.
+    console.warn('[Notifications] No se pudo obtener el push token:', e.message ?? e)
+    return null
+  }
 }
 
 export async function savePushToken(userId: string, token: string) {

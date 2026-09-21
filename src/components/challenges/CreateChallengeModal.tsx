@@ -11,6 +11,7 @@ import {
     ScrollView,
     Platform,
 } from 'react-native';
+import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
@@ -67,7 +68,7 @@ export default function CreateChallengeModal({
 
     const openTimePicker = () => {
         if (!date) {
-            Alert.alert('Elegí primero la fecha', 'Tocá "Fecha" antes de elegir el horario.');
+            showAlert('Elegí primero la fecha', 'Tocá "Fecha" antes de elegir el horario.');
             return;
         }
         setPickerMode('time');
@@ -102,7 +103,7 @@ export default function CreateChallengeModal({
 
     const handleCreate = async () => {
         if (!date || !venue) {
-            Alert.alert('Falta info', 'Debés elegir fecha y sede');
+            showAlert('Falta info', 'Debés elegir fecha y sede');
             return;
         }
 
@@ -119,7 +120,7 @@ export default function CreateChallengeModal({
         setLoading(false);
 
         if (!challenge) {
-            Alert.alert('No se pudo enviar', 'Puede que ya tengas un desafío pendiente con este jugador.');
+            showAlert('No se pudo enviar', 'Puede que ya tengas un desafío pendiente con este jugador.');
             return;
         }
 

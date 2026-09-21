@@ -4,6 +4,7 @@ import {
     StyleSheet, ActivityIndicator,
     Alert,
 } from 'react-native';
+import { showAlert } from '../../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,6 +15,7 @@ import { Avatar, Badge, Button, Card, SectionHeader } from '../../components/ui'
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { matchesService } from '../../services/matchService';
+import CreateChallengeModal from '../../components/challenges/CreateChallengeModal';
 
 export default function ProfileDetailScreen() {
     const router = useRouter();
@@ -21,6 +23,8 @@ export default function ProfileDetailScreen() {
     const { profile: myProfile } = useAuthStore();
     const [player, setPlayer] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [globalRank, setGlobalRank] = useState<number | null>(null);
+    const [modalVisible, setModalVisible] = useState(false);
 
     useEffect(() => {
         if (!id) return;
@@ -32,6 +36,13 @@ export default function ProfileDetailScreen() {
             .then(({ data }) => {
                 if (data) setPlayer(data);
                 setLoading(false);
+                if (data?.elo) {
+                    supabase
+                        .from('profiles')
+                        .select('id', { count: 'exact', head: true })
+                        .gt('elo', data.elo)
+                        .then(({ count }) => setGlobalRank(count !== null ? count + 1 : null));
+                }
             });
     }, [id]);
 
@@ -41,11 +52,40 @@ export default function ProfileDetailScreen() {
         ? Math.round((player.wins / (player.wins + player.losses)) * 100)
         : 0;
 
-    // Ya no crea el reto acá — lo manda al formulario, que es donde se elige
-    // modalidad, fecha y lugar (obligatorios)
+    // Abre el formulario de creación de desafío (fecha y sede obligatorias).
+    // Tras crearlo, navega al detalle del desafío real.
     const handleChallenge = () => {
         if (!player) return;
-        router.push(`/challenge/${player.id}` as any);
+        setModalVisible(true);
+    };
+
+    const handleChallengeCreated = async (challengeId: string) => {
+        setModalVisible(false);
+        if (!myProfile || !player) return;
+
+        try {
+            const convId = await matchesService.getOrCreateConversation(myProfile.id, player.id);
+            if (convId) {
+                await supabase.from('messages').insert({
+                    conversation_id: convId,
+                    sender_id: myProfile.id,
+                    content: 'Te desafié a un partido.',
+                    message_type: 'challenge',
+                    metadata: { challenge_id: challengeId },
+                });
+            }
+        } catch (e: any) {
+            console.warn('[ProfileDetailScreen] notifyByChat error:', e.message);
+        }
+
+        showAlert(
+            'Desafío enviado',
+            `Se le notificó a ${player.full_name ?? player.username}. Podrá aceptarlo o reproponer fecha y sede.`,
+            [
+                { text: 'Ver desafío', onPress: () => router.push(`/challenge/${challengeId}` as any) },
+                { text: 'OK' },
+            ] as any
+        );
     };
 
     const handleMessage = async () => {
@@ -55,7 +95,7 @@ export default function ProfileDetailScreen() {
             const convId = await matchesService.getOrCreateConversation(myProfile.id, player.id);
             if (convId) router.push(`/chat/${convId}` as any);
         } catch (e: any) {
-            Alert.alert('Error', e.message ?? 'No se pudo abrir el chat');
+            showAlert('Error', e.message ?? 'No se pudo abrir el chat');
         }
     };
 
@@ -128,7 +168,7 @@ export default function ProfileDetailScreen() {
                             </View>
                             <View style={styles.eloRight}>
                                 <Text style={styles.rankLabel}>RANKING</Text>
-                                <Text style={styles.rankValue}>#{player.ranking ?? '—'}</Text>
+                                <Text style={styles.rankValue}>#{globalRank ?? '—'}</Text>
                             </View>
                         </View>
                     </Card>
@@ -192,6 +232,15 @@ export default function ProfileDetailScreen() {
 
                 <View style={{ height: 100 }} />
             </ScrollView>
+
+            <CreateChallengeModal
+                visible={modalVisible}
+                onClose={() => setModalVisible(false)}
+                rivalId={player.id}
+                rivalName={player.full_name ?? player.username}
+                rivalAvatar={player.avatar_url ?? null}
+                onCreated={handleChallengeCreated}
+            />
         </SafeAreaView>
     );
 }

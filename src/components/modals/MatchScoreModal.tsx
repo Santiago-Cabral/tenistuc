@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import {
     View, Text, Modal, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
+import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import { submitMatchScore, SetScore } from '../../services/fixtureService';
@@ -70,7 +71,7 @@ export default function MatchScoreModal({
         const finalSets = sets.slice(0, setsPlayed);
 
         if (finalSets.some((s) => s.p1 === s.p2)) {
-            Alert.alert('Set empatado', 'Ningún set puede terminar en empate de games.');
+            showAlert('Set empatado', 'Ningún set puede terminar en empate de games.');
             return;
         }
 
@@ -80,7 +81,7 @@ export default function MatchScoreModal({
             reset();
             onSubmitted();
         } catch (e: any) {
-            Alert.alert('No se pudo guardar', e.message ?? 'Intentá de nuevo');
+            showAlert('No se pudo guardar', e.message ?? 'Intentá de nuevo');
         } finally {
             setLoading(false);
         }

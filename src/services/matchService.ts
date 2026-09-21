@@ -1,12 +1,13 @@
 import { supabase } from '../lib/supabase';
 
-export type MatchType = 'friendly' | 'competitive' | 'training' | 'tournament';
+export type MatchType = 'friendly' | 'competitive' | 'training' | 'tournament' | 'challenge';
 
 export const MATCH_TYPE_LABELS: Record<MatchType, string> = {
     friendly: 'Amistoso',
     competitive: 'Competitivo',
     training: 'Entrenamiento',
     tournament: 'Torneo',
+    challenge: 'Desafío',
 };
 
 // Solo estas dos modalidades afectan el ELO de los jugadores
@@ -27,8 +28,8 @@ const matchQuery = `
 const challengeQuery = `
   id, challenger_id, challenged_id, status, created_at,
   proposed_date, proposed_venue, proposed_by, message, match_id, match_type,
-  challenger:profiles!challenges_challenger_id_fkey(id, full_name, avatar_url, elo),
-  challenged:profiles!challenges_challenged_id_fkey(id, full_name, avatar_url, elo)
+  challenger:profiles!challenges_challenger_id_fkey(id, full_name, avatar_url, elo, is_online, last_seen),
+  challenged:profiles!challenges_challenged_id_fkey(id, full_name, avatar_url, elo, is_online, last_seen)
 `;
 
 export interface CreateChallengeInput {

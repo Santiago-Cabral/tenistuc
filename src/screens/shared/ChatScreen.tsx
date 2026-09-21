@@ -11,6 +11,7 @@ import { Colors, Typography, Spacing, Radius } from '../../theme';
 import { Avatar } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { isActuallyOnline } from '../../services/presenceService';
 
 interface Message {
     id: string;
@@ -24,6 +25,7 @@ interface OtherUser {
     full_name: string;
     avatar_url: string | null;
     is_online?: boolean;
+    last_seen?: string;
 }
 
 export default function ChatScreen() {
@@ -54,7 +56,27 @@ export default function ChatScreen() {
             )
             .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
+        const presenceChannel = supabase
+            .channel(`chat:${id}:presence`)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+                const upd = payload.new as { id?: string; is_online?: boolean; last_seen?: string } | null;
+                if (!upd?.id) return;
+                setOtherUser((prev) =>
+                    prev && prev.id === upd.id
+                        ? {
+                            ...prev,
+                            is_online: upd.is_online ?? prev.is_online,
+                            last_seen: upd.last_seen ?? prev.last_seen,
+                        }
+                        : prev
+                );
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+            supabase.removeChannel(presenceChannel);
+        };
     }, [id, profile]);
 
     const loadConversation = async () => {
@@ -62,8 +84,8 @@ export default function ChatScreen() {
             .from('conversations')
             .select(`
                 id,
-                p1:profiles!conversations_participant1_id_fkey(id, full_name, avatar_url, is_online),
-                p2:profiles!conversations_participant2_id_fkey(id, full_name, avatar_url, is_online)
+                p1:profiles!conversations_participant1_id_fkey(id, full_name, avatar_url, is_online, last_seen),
+                p2:profiles!conversations_participant2_id_fkey(id, full_name, avatar_url, is_online, last_seen)
             `)
             .eq('id', id)
             .single();
@@ -112,6 +134,19 @@ export default function ChatScreen() {
         return d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
     };
 
+    const lastSeenLabel = (iso?: string) => {
+        if (!iso) return '';
+        const diffMs = Date.now() - new Date(iso).getTime();
+        const mins = Math.floor(diffMs / 60000);
+        if (mins < 1) return 'última vez ahora';
+        if (mins < 60) return `última vez hace ${mins}min`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `última vez hace ${hours}h`;
+        return `última vez ${new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short' })}`;
+    };
+
+    const otherOnline = isActuallyOnline(otherUser);
+
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
             <View style={styles.header}>
@@ -124,14 +159,16 @@ export default function ChatScreen() {
                     onPress={() => otherUser && router.push(`/profile/${otherUser.id}` as any)}
                     activeOpacity={0.7}
                 >
-                    <Avatar uri={otherUser?.avatar_url} size={38} online={otherUser?.is_online} />
+                    <Avatar uri={otherUser?.avatar_url} size={38} online={otherOnline} />
                     <View style={styles.headerInfo}>
                         <Text style={styles.headerName} numberOfLines={1}>
                             {otherUser?.full_name ?? 'Chat'}
                         </Text>
-                        {otherUser?.is_online && (
-                            <Text style={styles.headerStatus}>En línea</Text>
-                        )}
+                        <Text style={[styles.headerStatus, !otherOnline && styles.headerStatusOffline]}>
+                            {otherOnline
+                                ? 'En línea'
+                                : (lastSeenLabel(otherUser?.last_seen) || 'Fuera de línea')}
+                        </Text>
                     </View>
                 </TouchableOpacity>
             </View>
@@ -223,6 +260,7 @@ const styles = StyleSheet.create({
     headerInfo: { flex: 1 },
     headerName: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 16, color: Colors.onSurface },
     headerStatus: { ...Typography.bodySm, color: Colors.primary, fontSize: 12 },
+    headerStatusOffline: { color: Colors.onSurfaceVariant },
     loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     messagesList: { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg, gap: Spacing.md },
     bubbleWrap: { alignItems: 'flex-start', gap: 3 },
