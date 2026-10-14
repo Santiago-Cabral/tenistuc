@@ -4,9 +4,11 @@ import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '../src/theme/index';
 
 export default function Index() {
-    const { profile, initialized } = useAuthStore();
+    const { profile, session, initialized } = useAuthStore();
 
-    if (!initialized) {
+    // Falta el perfil (se está cargando tras el sign-in): mostramos loader
+    // en vez de volver a /login. Esto evita tener que iniciar sesión 2 veces.
+    if (!initialized || (session && !profile)) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface }}>
                 <ActivityIndicator color={Colors.primary} />
@@ -14,7 +16,7 @@ export default function Index() {
         );
     }
 
-    if (!profile) {
+    if (!session || !profile) {
         return <Redirect href="/login" />;
     }
 

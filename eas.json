@@ -14,9 +14,6 @@
       "autoIncrement": true
     }
   },
-  "hooks": {
-    "preInstall": "./eas-build-pre-install.sh"
-  },
   "submit": {
     "production": {}
   }

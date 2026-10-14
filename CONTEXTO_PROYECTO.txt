@@ -1,6 +1,6 @@
 ================================================================================
 TENISTUC — CONTEXTO COMPLETO DEL PROYECTO (para el próximo agente)
-Actualizado: 2026-09-16
+Actualizado: 2026-09-21
 ================================================================================
 
 LEER PRIMERO. Este archivo resume todo lo que se hizo, lo que falta y las
@@ -156,6 +156,23 @@ SESIÓN E — Chat del organizador + fix desafío + deploy (2026-09-16):
   https://expo.dev/accounts/scsoftwares-team/projects/tenistuc/builds/4b9ab909-839d-4e5d-aa9e-43b040454e90
   Cuando termine, instalar el APK para probar push + los fixes nuevos.
 
+SESIÓN F — Estado working copy + [3]/[4] avance (2026-09-21):
+- CAMBIOS SIN COMMITEAR revisados:
+  · app/index.tsx: fix del doble login. Ahora espera el perfil con loader
+    (si hay session y falta profile) en vez de redirigir a /login.
+  · eas.json: se quitaron los hooks preInstall (el build queda sin copia de
+    google-services.json; decidir si restaurarlos o commitear así).
+  · package.json + lock: se agregó eas-cli como devDependency.
+- CLI Supabase: el login actual es UNA CUENTA SIN ACCESO al proyecto TenisTuc
+  (s1c.softwares@gmail.com, org zkdsrqmpgrpqdisfvivt) → `secrets list` da
+  403. Para operar por CLI hay que hacer login con la cuenta owner, o usar
+  un PAT de la cuenta owner (app.supabase.com → Settings → Access Tokens).
+- [3] SECRETS: el usuario los configurará MANUALMENTE en Dashboard →
+  Settings → Edge Functions → Secrets. NOTIFY_SECRET ya generado y guardado
+  en .env (gitignored, NO subirlo). SUPABASE_URL ya conocido.
+- [4] WEBHOOKS: el usuario los creará manualmente en Database → Webhooks
+  (tablas/eventos y header detallados en pendiente [4] abajo).
+
 --------------------------------------------------------------------------------
 5) ESTADO ACTUAL — PENDIENTES Y BLOQUEOS (IMPORTANTE)
 --------------------------------------------------------------------------------
@@ -167,17 +184,22 @@ SESIÓN E — Chat del organizador + fix desafío + deploy (2026-09-16):
     mp-webhook) en qodajlsxihukgfdvntjy. CLI logueado con la cuenta owner
     (proyecto "Santiago-Cabral's Project").
 
-[3] ENV/SECRETS pendientes en Supabase:
+[3] ENV/SECRETS — EN CURSO (dashboard manual, 2026-09-21). Setear en
+    Dashboard → Settings → Edge Functions → Secrets:
     MERCADOPAGO_CLIENT_ID, MERCADOPAGO_CLIENT_SECRET,
     MERCADOPAGO_OAUTH_REDIRECT_URI (default SUPA_URL/functions/v1/mp-oauth-callback;
     debe estar registrado como redirect_uri en MercadoPago),
     MERCADOPAGO_MARKETPLACE, MERCADOPAGO_APP_FEE_PCT, SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY, NOTIFY_SECRET.
+    SUPABASE_SERVICE_ROLE_KEY, NOTIFY_SECRET (ya generado, ver .env).
 
-[4] WEBHOOKS DE BD (Dashboard → Database → Webhooks) según schema.sql sección 15:
-    challenges INSERT, tournaments INSERT+UPDATE, tournament_registrations
-    INSERT+UPDATE, messages INSERT → /functions/v1/notify
-    Header: Authorization: Bearer NOTIFY_SECRET.
+[4] WEBHOOKS DE BD (Dashboard → Database → Webhooks) según schema.sql sección
+    15. PENDIENTE — configurar manual (2026-09-21). URL de TODOS:
+    https://qodajlsxihukgfdvntjy.supabase.co/functions/v1/notify
+    Header (todos): Authorization: Bearer <NOTIFY_SECRET>
+      · challenges              INSERT
+      · tournaments             INSERT, UPDATE
+      · tournament_registrations INSERT, UPDATE
+      · messages                INSERT
 
 [5] FCM: el mensaje "Default FirebaseApp is not initialized" en el build viejo.
     Se resuelve regenerando el dev client. Build development EN CURSO 16/09

@@ -1,10 +1,10 @@
-import type { ConfigContext, ExpoConfig } from 'expo/config'
+import { ExpoConfig, ConfigContext } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
-  ...config,
+  ...(config as ExpoConfig),
   android: {
     ...config.android,
     googleServicesFile:
       process.env.GOOGLE_SERVICES_FILE ?? './google-services.json',
   },
-})
+});

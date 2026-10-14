@@ -1,20 +1,18 @@
 {
   "expo": {
-    "name": "tenistuc",
+    "name": "TenisTuc",
     "slug": "tenistuc",
     "scheme": "tenistuc",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./logoverde.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./logoverde.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F8FAF9"
-    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tenistuc.app"
+      "bundleIdentifier": "com.tenistuc.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,14 +22,26 @@
       "package": "com.tenistuc.app",
       "googleServicesFile": "./google-services.json"
     },
-    "web": {
-      "favicon": "",
-      "bundler": "metro"
-    },
     "plugins": [
       "expo-router",
       "@react-native-community/datetimepicker",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TenisTuc necesita acceder a tus fotos para elegir tu foto de perfil.",
+          "cameraPermission": "TenisTuc necesita la cámara para tomar tu foto de perfil."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./logoverde.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#F8FAF9",
+          "imageWidth": 200
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
