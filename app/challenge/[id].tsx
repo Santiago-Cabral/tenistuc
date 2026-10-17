@@ -23,6 +23,7 @@ import { Avatar } from '../../src/components/ui/Avatar';
 import { Badge } from '../../src/components/ui/Badge';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
+import { MATCH_TYPE_LABELS, affectsElo } from '../../src/services/matchService';
 import { isActuallyOnline } from '../../src/services/presenceService';
 
 const VENUES = [
@@ -306,6 +307,25 @@ export default function ChallengeDetailScreen() {
                         </View>
                     </View>
 
+                    <View style={styles.divider} />
+
+                    <View style={styles.detailRow}>
+                        <Ionicons
+                            name={affectsElo(challenge.match_type) ? 'trophy-outline' : 'tennisball-outline'}
+                            size={20}
+                            color={Colors.primary}
+                        />
+                        <View style={styles.detailTextCol}>
+                            <Text style={styles.detailLabel}>Tipo de desafío</Text>
+                            <Text style={styles.detailValue}>
+                                {MATCH_TYPE_LABELS[challenge.match_type] ?? challenge.match_type}
+                            </Text>
+                            {challenge.match_type === 'competitive' && (
+                                <Text style={styles.detailHint}>El ganador suma 5 puntos.</Text>
+                            )}
+                        </View>
+                    </View>
+
                     {!!challenge.message && (
                         <>
                             <View style={styles.divider} />
@@ -470,6 +490,7 @@ const styles = StyleSheet.create({
     detailTextCol: { flex: 1, gap: 2 },
     detailLabel: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
     detailValue: { ...Typography.bodyLg, color: Colors.onSurface },
+    detailHint: { ...Typography.bodySm, color: Colors.primary, marginTop: 2 },
     divider: { height: 1, backgroundColor: Colors.surfaceContainerHigh },
 
     actionsCol: { gap: Spacing.base },

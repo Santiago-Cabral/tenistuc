@@ -2,9 +2,12 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../src/theme/index";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { View, StyleSheet } from "react-native";
+import { useUnreadMessagesCount } from "../../src/hooks/useNotifications";
 
 export default function OrganizerTabsLayout() {
     const insets = useSafeAreaInsets();
+    const unreadMessages = useUnreadMessagesCount();
 
     return (
         <Tabs
@@ -49,9 +52,9 @@ export default function OrganizerTabsLayout() {
             <Tabs.Screen
                 name="payments"
                 options={{
-                    title: "Cobros",
+                    title: "Jugadores",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="card-outline" color={color} size={size} />
+                        <Ionicons name="people-outline" color={color} size={size} />
                     ),
                 }}
             />
@@ -60,7 +63,10 @@ export default function OrganizerTabsLayout() {
                 options={{
                     title: "Mensajes",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="chatbubbles-outline" color={color} size={size} />
+                        <View>
+                            <Ionicons name="chatbubbles-outline" color={color} size={size} />
+                            {unreadMessages > 0 && <View style={styles.dot} />}
+                        </View>
                     ),
                 }}
             />
@@ -85,3 +91,17 @@ export default function OrganizerTabsLayout() {
         </Tabs>
     );
 }
+
+const styles = StyleSheet.create({
+    dot: {
+        position: "absolute",
+        top: -2,
+        right: -3,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: Colors.error,
+        borderWidth: 1.5,
+        borderColor: Colors.surface,
+    },
+});

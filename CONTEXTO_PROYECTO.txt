@@ -1,6 +1,6 @@
 ================================================================================
 TENISTUC — CONTEXTO COMPLETO DEL PROYECTO (para el próximo agente)
-Actualizado: 2026-09-21
+Actualizado: 2026-10-16
 ================================================================================
 
 LEER PRIMERO. Este archivo resume todo lo que se hizo, lo que falta y las
@@ -10,13 +10,17 @@ convenciones CRÍTICAS. No adivinar: preguntar si hay dudas sobre el estado.
 1) QUÉ ES
 --------------------------------------------------------------------------------
 App de tenis amateur (Tucumán, Argentina): ranking ELO, rivales, desafíos,
-chats 1:1, torneos con inscripción PAGA (MercadoPago), notificaciones push.
+chats 1:1, torneos con inscripción (habilitada por el organizador) y
+notificaciones push.
 
 Stack:
-- Frontend: React Native + Expo (SDK recent) + Expo Router + Zustand
+- Frontend: React Native + Expo (SDK 57) + Expo Router + Zustand
 - Backend: Supabase (Auth + Postgres + Realtime + Edge Functions)
-- Pagos: MercadoPago Checkout Pro marketplace (sellers = organizadores)
-- Notificaciones: Supabase DB + Expo Push (client y edge functions)
+- Inscripciones: SIN pasarela de pago. El organizador habilita el lugar a mano
+  y coordina el pago por fuera (efectivo/transferencia). La app sólo guarda el
+  estado 'pending' | 'paid' de la inscripción. (MercadoPago fue ELIMINADO.)
+- Login social: Google y Apple vía OAuth PKCE (nuevo).
+- Notificaciones: tabla `notifications` + Expo Push (edge functions).
 - Fuentes: Lexend (headlines) + Plus Jakarta Sans (body)
 - Tema: theme "The Kinetic Court" en src/theme/index.ts
 
@@ -25,192 +29,164 @@ Stack:
 --------------------------------------------------------------------------------
 app/
   _layout.tsx                     Root: fonts, AuthGuard, splash, push receiver
+  index.tsx                       Router por rol (espera el profile con loader)
   login.tsx / register.tsx / forgot-password.tsx   (thin wrappers)
-  privacy-policy.tsx              Pantalla de Política de Privacidad (NUEVA)
-  index.tsx, notifications.tsx, matches.tsx, edit-profile.tsx
-  tournament/[id].tsx             Detalle torneo + pagar inscripción (MP)
+  auth/callback.tsx               Retorno del OAuth (deep link tenistuc://auth/callback)
+  privacy-policy.tsx              Política de Privacidad (sin MercadoPago)
+  notifications.tsx, matches.tsx, edit-profile.tsx
+  tournament/[id].tsx             Detalle torneo + inscribirse (sin pago in-app)
   challenge/[id].tsx, challenge-respond/[challengeId].tsx
   profile/[id].tsx, chat/[id].tsx
   athleteTabs/   _layout, index, rivals, ranking, messages, profile
   organizerTabs/ _layout, dashboard, tournaments, fixture, courts, payments,
                  messages, profile
 src/
-  lib/supabase.ts                 Cliente supabase-js
+  lib/supabase.ts                 Cliente supabase-js (flowType: 'pkce')
   theme/index.ts                  Design system
   components/ui/                  Button, InputField, Card, Badge, Avatar, Chip,
                                   Text, SectionHeader, EloIndicator, PrivacyConsent
+  components/modals/              MatchScoreModal, MatchScheduleModal (programar
+                                  fecha/hora + cancha), CreateChallengeModal
   screens/                        LoginScreen, RegisterScreen, ForgotPasswordScreen,
                                   ProfileScreen (atleta), MessagesScreen COMPARTIDO
-                                  (src/screens/shared/MessagesScreen.tsx, lo usan
-                                  athleteTabs/messages y organizerTabs/messages) y
-                                  pantallas de rutas
+                                  (src/screens/shared/MessagesScreen.tsx)
   services/
-    organizerService.ts           Torneos, listas (open/closed), pagos, notificaciones
+    authService.ts                OAuth Google/Apple (PKCE + WebBrowser)
+    organizerService.ts           Torneos, listas (open/closed), jugadores, canchas
     athleteService.ts             Rivales, retos, partidos, ranking
-    chatService.ts, presenceService.ts, notifications.ts (push), paymentsService.ts
+    fixtureService.ts             Generar fixture, getFixture, cargar resultado,
+                                  scheduleMatch (scheduled_at + court_id + location)
+    chatService.ts, presenceService.ts, notifications.ts (push)
+    notificationService.ts        In-app + RPC notify_user + send-push
+    appAlert.tsx                  SISTEMA DE ALERTAS CON MARCA (showAlert).
+                                  NO VOLVER A USAR Alert.alert nativo.
+  hooks/useNotifications.ts       Badge no leídas + useUnreadMessagesCount()
   stores/
     authStore.ts                  Zustand: session/profile, signIn/signUp/signOut,
-                                  updateProfile, recordPrivacyConsent, deleteAccount
-  services/
-    appAlert.tsx                  SISTEMA DE ALERTAS CON MARCA (NUEVO):
-                                  showAlert(title, message?, buttons?) con botones
-                                  primary/cancel/destructive + icono por tono
-                                  (success/danger/info). Host global AppAlertHost
-                                  montado en app/_layout.tsx. Sustituyó a
-                                  Alert.alert de react-native en TODOS los .tsx
-                                  (reemplazo mecánico masivo, ~100 llamadas).
-                                  NO VOLVER A USAR Alert.alert nativo.
+                                  updateProfile, recordPrivacyConsent, deleteAccount.
+                                  PROFILE_COLUMNS excluye expo_push_token.
 supabase/
-  schema.sql                      Esquema COMPLETO (refresco). Incluye secciones
-                                  MercadoPago, notificaciones y correcta para DB nueva.
-  migration_2026_09_16_mercadopago.sql   Migración INCREMENTAL e idempotente para
-                                  aplicar a la DB existente vía SQL Editor.
+  schema.sql                      Esquema COMPLETO (refresco para DB nueva).
+  migration_2026_10_14_match_scheduling.sql   matches.court_id + índice.
+  migration_2026_10_14_oauth_username.sql     handle_new_user robusto (OAuth).
+  migration_2026_10_14_security_realtime.sql  RLS avatars, realtime, expo_push_token.
+  migration_2026_09_16_mercadopago.sql        HISTÓRICO (MP eliminado; no aplicar
+                                              en DB nueva).
 src/supabase/                     Proyecto CLI Supabase (config.toml) + Edge Functions
-  config.toml                     Rutas + verify_jwt por función
+  config.toml                     notify (verify_jwt=false), send-push (verify_jwt=true)
   functions/
-    notify/                       INSERT en alerts → notifica al destinatario
-                                  (challenges INSERT, tournaments UPDATE closed/open,
-                                  tournament_registrations INSERT)
-    mp-oauth-url/                 Genera URL de OAuth de MercadoPago (redirect_uri)
-    mp-oauth-callback/            Exchange code → guarda access_token del organizador
-    create-mp-preference/         Crea preferencia Checkout Pro (seller token + fee)
-    check-mp-payment/             Busca pago y marca inscripción pagada + notifica
-    mp-webhook/                   Webhook de MP → marca pagada por external_reference
-logoverde.png                     LOGO en la raíz del proyecto (NUEVO)
+    notify/                       Webhooks de BD → crea notifications + Expo push.
+                                  Valida header Authorization: Bearer NOTIFY_SECRET.
+                                  Casos: challenges INSERT, tournaments INSERT/UPDATE,
+                                  tournament_registrations INSERT, matches UPDATE
+                                  (programación), messages INSERT.
+    send-push/                    Push desde el cliente autenticado (JWT). Lee el
+                                  token con service_role (expo_push_token está
+                                  revocado para anon/authenticated).
+logoverde.png                     LOGO en la raíz del proyecto
 CONTEXTO_PROYECTO.txt             Este archivo
 
 --------------------------------------------------------------------------------
 3) CONVENCIONES CRÍTICAS (¡NO ROMPER!)
 --------------------------------------------------------------------------------
 - TypeScript estricto. Verificar SIEMPRE con:  npx tsc --noEmit
-- NO usar el comentario que se agrega a los archivos. No usar Deno en edge
-  functions: patrón = export default async function handler(req: Request),
-  env con process.env, helper json(body, status). Copiar de notify/index.ts.
+- NO usar Deno en edge functions: patrón = async function handler(req: Request),
+  env con process.env, y `export default { fetch: handler }`. Copiar de
+  notify/index.ts o send-push/index.ts.
 - Mensajes de UI en español argentino; identificadores de código en inglés.
-- ALERTAS/DIALOGOS: usar SIEMPRE showAlert(...) de src/services/appAlert.tsx
-  (con marca). Prohibido volver a Alert.alert de react-native.
+- ALERTAS/DIÁLOGOS: usar SIEMPRE showAlert(...) de src/services/appAlert.tsx.
 - UI: componentes de src/components/ui, tema de src/theme (nada hardcodeado).
-- Supabase client: las queries desde el cliente se hacen con supabase-js.
-  Las operaciones que necesitan service role (enviar push, MP) se hacen en
-  edge functions con SUPABASE_SERVICE_ROLE_KEY.
-- Pagos: Checkout Pro marketplace. Cada organizador vincula su cuenta con
-  OAuth (access_token en organizer_mp_accounts). La comisión se manda como
-  marketplace_fee (porcentaje = env MERCADOPAGO_APP_FEE_PCT). Código
-  marketplace = env MERCADOPAGO_MARKETPLACE. Risk: mp_status in registration.
+- Supabase client: las queries se hacen con supabase-js. Lo que necesita
+  service role (push) se hace en edge functions con SUPABASE_SERVICE_ROLE_KEY.
+- `profiles.expo_push_token` NO es legible por el cliente: usar siempre
+  PROFILE_COLUMNS en authStore y listas explícitas en los select.
+- Inscripciones: sin pasarela. El organizador habilita con el toggle en la
+  pestaña "Jugadores" (organizerTabs/payments.tsx); pasar a 'paid' dispara la
+  notificación de inscripción confirmada.
 
 --------------------------------------------------------------------------------
 4) LO QUE SE HIZO (historial por sesión)
 --------------------------------------------------------------------------------
-SESIÓN A — Fundamentos (ya establecidos antes):
-- Auth email/password + perfiles, ELO, ranking, rivales, desafíos, chat
-  Realtime, torneos y organizador, dashboard, fixture, canchas.
-- Reminder: en esta app NO se aplica el widget UI que se copió antes de
-  git, el store de auth es src/stores/authStore.ts (re-export en
-  src/store/authStore.ts quedó como alias).
+SESIÓN A — Fundamentos: Auth email/password, perfiles, ELO, ranking, rivales,
+desafíos, chat Realtime, torneos, dashboard, fixture, canchas.
 
-SESIÓN B — Admin trio (MercadoPago + notificaciones + cerrar lista):
-- DB: status 'closed', columnas mp_* en tournament_registrations,
-  organizer_mp_accounts, mp_oauth_states, RPCs notify_user /
-  get_my_mp_status / disconnect_mp, trigger enforce_registration_open,
-  RPC delete_account (ver sesión D), sección 15 webhooks en schema.sql.
-- Edge functions: notify (extendida), mp-oauth-url, mp-oauth-callback,
-  create-mp-preference, check-mp-payment, mp-webhook.
-- Client: paymentsService.ts, organizerService.ts (cerrar/reabrir, pagos),
-  tournament/[id].tsx (join + pagar), organizerTabs/tournaments.tsx
-  (cerrar/reabrir + avisar), organizerTabs/payments.tsx (notificar por
-  jugador + auto al pagar, comisión), organizerTabs/profile.tsx (vincular
-  MP), athleteTabs (status 'closed').
-- google-services.json agregado, android.googleServicesFile en app.json,
-  .gitignore actualizado.
+SESIÓN B — Admin trio (MercadoPago + notificaciones + cerrar lista): [MP YA
+  ELIMINADO en sesión G] quedó lo de notificaciones + cerrar/reabrir lista.
 
-SESIÓN C — Consentimiento de privacidad:
-- PrivacyConsent.tsx (checkbox + link) en components/ui.
-- Login: el checkbox SOLO aplica a registro vía Google/Apple (nuevos).
-  El login por email/password de cuentas existentes NO pide consentimiento.
-- Register: obligatorio aceptar para crear cuenta.
-- authStore: privacy_consented_at + privacy_policy_version ('1.0'),
-  recordPrivacyConsent().
-- app/privacy-policy.tsx: texto completo en español (Ley 25.326).
-- Perfiles (atleta y organizador): botón "Eliminar mi cuenta" con DOBLE
-  confirmación; RPC delete_account (security definer) borra auth.users y
-  todo cascada por FK. Irreversible.
+SESIÓN C — Consentimiento de privacidad: PrivacyConsent.tsx, privacy_consented_at
+  + privacy_policy_version '1.0', app/privacy-policy.tsx (Ley 25.326), botón
+  "Eliminar mi cuenta" (doble confirmación) + RPC delete_account.
 
-SESIÓN D — Logo:
-- Se reemplazó el ícono de pelota por logoverde.png en Login y Register.
-- app.json: icon, splash.image y adaptiveIcon.foregroundImage = ./logoverde.png
-- NOTA: el ícono del APK se actualiza en el próximo build (expo prebuild
-  regenera android/). El logo ya apunta en config.
+SESIÓN D — Logo: logoverde.png reemplaza el ícono de pelota (Login/Register +
+  app.json). NOTA: el ícono del APK se actualiza en el próximo build.
 
-SESIÓN E — Chat del organizador + fix desafío + deploy (2026-09-16):
-- NUEVO src/screens/shared/MessagesScreen.tsx: bandeja de mensajes extraída y
-  compartida. app/athleteTabs/messages.tsx y NUEVO app/organizerTabs/messages.tsx
-  son thin wrappers. Se agregó la tab "Mensajes" (chatbubbles-outline) al
-  organizerTabs/_layout. RLS de conversations/messages ya es neutral por rol,
-  así que el organizador chatea igual que un atleta.
-- BUG FIXED: "Desafiar" en ProfileDetailScreen navegaba a /challenge/{profileId}
-  (que espera un id de desafío) → "No se encontró el desafío". Ahora abre el
-  CreateChallengeModal y tras crear navega a /challenge/{challengeId} real y
-  notifica por chat (replica el flujo de RivalsScreen/RankingScreen).
-- Edge functions deployadas (ver pendiente [2]).
-- Build dev client EAS relanzado (con el código actualizado):
-  https://expo.dev/accounts/scsoftwares-team/projects/tenistuc/builds/4b9ab909-839d-4e5d-aa9e-43b040454e90
-  Cuando termine, instalar el APK para probar push + los fixes nuevos.
+SESIÓN E — Chat del organizador + fix desafío + deploy: MessagesScreen
+  compartido (wrapper en athleteTabs y organizerTabs), fix de "Desafiar".
 
-SESIÓN F — Estado working copy + [3]/[4] avance (2026-09-21):
-- CAMBIOS SIN COMMITEAR revisados:
-  · app/index.tsx: fix del doble login. Ahora espera el perfil con loader
-    (si hay session y falta profile) en vez de redirigir a /login.
-  · eas.json: se quitaron los hooks preInstall (el build queda sin copia de
-    google-services.json; decidir si restaurarlos o commitear así).
-  · package.json + lock: se agregó eas-cli como devDependency.
-- CLI Supabase: el login actual es UNA CUENTA SIN ACCESO al proyecto TenisTuc
-  (s1c.softwares@gmail.com, org zkdsrqmpgrpqdisfvivt) → `secrets list` da
-  403. Para operar por CLI hay que hacer login con la cuenta owner, o usar
-  un PAT de la cuenta owner (app.supabase.com → Settings → Access Tokens).
-- [3] SECRETS: el usuario los configurará MANUALMENTE en Dashboard →
-  Settings → Edge Functions → Secrets. NOTIFY_SECRET ya generado y guardado
-  en .env (gitignored, NO subirlo). SUPABASE_URL ya conocido.
-- [4] WEBHOOKS: el usuario los creará manualmente en Database → Webhooks
-  (tablas/eventos y header detallados en pendiente [4] abajo).
+SESIÓN F — Fix doble login (app/index.tsx espera el profile), eas.json, eas-cli
+  como devDependency.
+
+SESIÓN G — Eliminación de MercadoPago + OAuth social + programación de partidos
+  (SIN COMMITEAR hasta ahora):
+  · MercadoPago ELIMINADO por completo del cliente y de las edge functions
+    (borradas mp-oauth-url, mp-oauth-callback, create-mp-preference,
+    check-mp-payment, mp-webhook, paymentsService.ts). organizerTabs/profile.tsx
+    ya no vincula cuenta MP; organizerTabs/payments.tsx pasó a ser "Jugadores"
+    (Habilitar/Pendiente). OJO: quedan tablas/columnas mp_* en schema.sql y en
+    migration_2026_09_16_mercadopago.sql como remanente histórico (no molesta).
+  · LOGIN SOCIAL Google/Apple: src/services/authService.ts (PKCE con
+    WebBrowser.openAuthSessionAsync), app/auth/callback.tsx, flowType 'pkce' en
+    src/lib/supabase.ts, plugin expo-web-browser en app.config.ts.
+    handle_new_user robusto para OAuth (username con sufijo si colisiona).
+  · PROGRAMAR PARTIDOS: matches.scheduled_at + matches.court_id (migración
+    2026_10_14_match_scheduling.sql) + MatchScheduleModal desde
+    organizerTabs/fixture.tsx (elegir fecha/hora + cancha, detecta doble uso de
+    cancha/horario). El jugador ya ve fecha y cancha (location = nombre de la
+    cancha) en app/matches.tsx y athleteTabs/index.tsx.
+  · PUSH al programar partido: la edge function notify, en matches UPDATE → avisa a
+    player1 y player2 (tipo 'match_scheduled').
+  · Endurecimiento: avatars por carpeta uid, expo_push_token revocado a
+    anon/authenticated, realtime en profiles/messages/conversations/notifications,
+    edge function send-push.
+  · app.json: cameraPermission: false + microphonePermission: false (solo galería).
+  · eas.json: env EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY por
+    perfil de build + appVersionSource "remote".
 
 --------------------------------------------------------------------------------
 5) ESTADO ACTUAL — PENDIENTES Y BLOQUEOS (IMPORTANTE)
 --------------------------------------------------------------------------------
-[1] ✅ RESUELTO — Migración aplicada 2026-09-16 vía SQL Editor.
-    El error "column tournament_registrations.mp_status does not exist" (42703) debería desaparecer.
+APLICAR MIGRACIONES (SQL Editor) si no se corrieron todavía:
+    supabase/migration_2026_10_14_oauth_username.sql
+    supabase/migration_2026_10_14_security_realtime.sql
+    supabase/migration_2026_10_14_match_scheduling.sql
+  y deployar las edge functions: notify y send-push.
+    cd src/supabase  →  npx supabase functions deploy notify
+                       npx supabase functions deploy send-push
 
-[2] ✅ RESUELTO — Edge functions deployadas 2026-09-16 (notify,
-    mp-oauth-url, mp-oauth-callback, create-mp-preference, check-mp-payment,
-    mp-webhook) en qodajlsxihukgfdvntjy. CLI logueado con la cuenta owner
-    (proyecto "Santiago-Cabral's Project").
+CONFIG EXTERNA (Dashboard) PENDIENTE:
+  [A] OAuth (Authentication → Providers → Google / Apple):
+      · Redirect URLs: tenistuc://auth/callback  y  tenistuc://**
+      · El callback de Supabase es .../auth/v1/callback (registrarlo en Google
+        Cloud Console / Apple Developer).
+      · Sin probar end-to-end todavía.
+  [B] WEBHOOKS (Database → Webhooks), URL de TODOS:
+        https://qodajlsxihukgfdvntjy.supabase.co/functions/v1/notify
+      Header (todos): Authorization: Bearer <NOTIFY_SECRET>
+        · challenges              INSERT
+        · tournaments             INSERT, UPDATE
+        · tournament_registrations INSERT, UPDATE
+        · matches                 UPDATE   ← necesario para el push de "partido
+                                            programado" (item 7)
+        · messages                INSERT
+  [C] SECRETS de edge functions (Settings → Edge Functions → Secrets):
+      SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, NOTIFY_SECRET.
+      (Las viejas MERCADOPAGO_* ya no se usan.)
 
-[3] ENV/SECRETS — EN CURSO (dashboard manual, 2026-09-21). Setear en
-    Dashboard → Settings → Edge Functions → Secrets:
-    MERCADOPAGO_CLIENT_ID, MERCADOPAGO_CLIENT_SECRET,
-    MERCADOPAGO_OAUTH_REDIRECT_URI (default SUPA_URL/functions/v1/mp-oauth-callback;
-    debe estar registrado como redirect_uri en MercadoPago),
-    MERCADOPAGO_MARKETPLACE, MERCADOPAGO_APP_FEE_PCT, SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY, NOTIFY_SECRET (ya generado, ver .env).
-
-[4] WEBHOOKS DE BD (Dashboard → Database → Webhooks) según schema.sql sección
-    15. PENDIENTE — configurar manual (2026-09-21). URL de TODOS:
-    https://qodajlsxihukgfdvntjy.supabase.co/functions/v1/notify
-    Header (todos): Authorization: Bearer <NOTIFY_SECRET>
-      · challenges              INSERT
-      · tournaments             INSERT, UPDATE
-      · tournament_registrations INSERT, UPDATE
-      · messages                INSERT
-
-[5] FCM: el mensaje "Default FirebaseApp is not initialized" en el build viejo.
-    Se resuelve regenerando el dev client. Build development EN CURSO 16/09
-    (build id 4b9ab909-839d-4e5d-aa9e-43b040454e90). Al terminar: instalar
-    APK y probar push. Comando para regenerar: eas build --platform android
-    --profile development (o npx expo run:android).
-
-[6] MercadoPago: se necesita la habilitación de "markeplace" por parte de MP
-    para que marketplace_fee tenga efecto. externo.
-
-[7] DateTimePicker: advertencia de deprecación (onChange). Cosmético, opcional.
+PRUEBAS FUNCIONALES PENDIENTES:
+  · Flujo completo: atleta se inscribe → organizador habilita en "Jugadores" →
+    llega la notificación; programar partido (fecha/hora/cancha) → push a ambos
+    jugadores; login social Google/Apple.
+  · FCM/push en dev build (regenerar el dev client tras los cambios).
 
 --------------------------------------------------------------------------------
 6) DATOS CLAVE
@@ -218,9 +194,8 @@ SESIÓN F — Estado working copy + [3]/[4] avance (2026-09-21):
 - Supabase project ref: qodajlsxihukgfdvntjy
 - EAS projectId: b157628b-225c-44e5-bafd-3832342cde9a (app.json)
 - Android package: com.tenistuc.app ; scheme: tenistuc (deep links tenistuc://)
-- Target llamadas: localhost como "green" + green & white, SPDX = ? (solo UI)
-- Login OAuth Google/Apple: NO implementado todavía (handlers son stubs con
-  TODO en LoginScreen). Deben respetar el checkbox de privacidad consent.
+- Login OAuth: Google/Apple (PKCE). Respeta el checkbox de privacidad para
+  cuentas nuevas.
 
 --------------------------------------------------------------------------------
 7) COMANDOS ÚTILES
@@ -228,7 +203,8 @@ SESIÓN F — Estado working copy + [3]/[4] avance (2026-09-21):
   npx tsc --noEmit                     # typecheck (mínimo obligatorio)
   npx expo start                       # dev
   eas build --platform android --profile development   # dev client (FCM)
-  npx supabase functions deploy <name> # deploy edge function (desde src/supabase)
+  cd src/supabase; npx supabase functions deploy notify        # edge functions
+  cd src/supabase; npx supabase functions deploy send-push
 
 --------------------------------------------------------------------------------
 8) NOTAS DE DISEÑO

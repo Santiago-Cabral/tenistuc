@@ -8,20 +8,6 @@ project_id = "qodajlsxihukgfdvntjy"
 [functions.notify]
 verify_jwt = false
 
-# webhook que llama MercadoPago (sin JWT, validado por el propio MP)
-[functions.mp-webhook]
-verify_jwt = false
-
-# el organizador la abre: devuelve la URL de autorización OAuth
-[functions.mp-oauth-url]
-verify_jwt = true
-
-# redirige el navegador: intercambia el code por los tokens del seller
-[functions.mp-oauth-callback]
-verify_jwt = false
-
-[functions.create-mp-preference]
-verify_jwt = true
-
-[functions.check-mp-payment]
+# push desde el cliente (autenticado por JWT); lee el token con service_role
+[functions.send-push]
 verify_jwt = true

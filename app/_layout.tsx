@@ -18,6 +18,7 @@ import { Colors } from "../src/theme";
 import { useNotifications } from "../src/hooks/useNotifications";
 import { usePresence } from "../src/hooks/usePresence";
 import { AppAlertHost } from "../src/services/appAlert";
+import { ensureNotificationPermission } from "../src/notifications/notificationService";
 
 export default function RootLayout() {
     const { initialize, initialized, session } = useAuthStore();
@@ -40,13 +41,20 @@ export default function RootLayout() {
         initialize();
     }, []);
 
+    // Pedir permiso de notificaciones apenas abre la app (independiente del login)
+    useEffect(() => {
+        ensureNotificationPermission().catch(() => {});
+    }, []);
+
     useEffect(() => {
         if (!initialized) return;
 
+        const seg0 = segments[0] as string | undefined;
         const inAuthScreens =
-            segments[0] === "login" ||
-            segments[0] === "register" ||
-            segments[0] === "forgot-password";
+            seg0 === "login" ||
+            seg0 === "register" ||
+            seg0 === "forgot-password" ||
+            seg0 === "auth";
 
         if (!session && !inAuthScreens) {
             router.replace("/login");

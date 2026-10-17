@@ -122,3 +122,41 @@ export function useUnreadNotificationsCount() {
 
   return count
 }
+
+// Cuenta las notificaciones de tipo 'message' sin leer. Se usa para el punto
+// rojo en el ícono de Mensajes (se limpia al abrir la bandeja o el chat).
+export function useUnreadMessagesCount() {
+  const { session } = useAuthStore()
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId) { setCount(0); return }
+
+    let mounted = true
+    const load = () => {
+      supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('type', 'message')
+        .eq('read', false)
+        .then(({ count: c }) => { if (mounted) setCount(c ?? 0) })
+    }
+
+    load()
+
+    const channel = supabase
+      .channel(`messages-unread:${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        load
+      )
+      .subscribe()
+
+    return () => { mounted = false; supabase.removeChannel(channel) }
+  }, [session?.user?.id])
+
+  return count
+}

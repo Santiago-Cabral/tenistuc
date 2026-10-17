@@ -13,6 +13,11 @@ export interface BracketPlayer {
     elo: number;
 }
 
+export interface FixtureCourt {
+    id: string;
+    name: string;
+}
+
 export interface FixtureMatch {
     id: string;
     tournament_id: string;
@@ -25,6 +30,10 @@ export interface FixtureMatch {
     status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
     is_bye: boolean;
     score: { sets: SetScore[]; winner_id: string } | null;
+    scheduled_at: string | null;
+    location: string | null;
+    court_id: string | null;
+    court?: FixtureCourt | null;
     player1?: BracketPlayer | null;
     player2?: BracketPlayer | null;
 }
@@ -208,6 +217,8 @@ export async function getFixture(tournamentId: string): Promise<FixtureMatch[][]
         .select(`
             id, tournament_id, round, bracket_position, player1_id, player2_id,
             next_match_id, next_match_slot, status, is_bye, score,
+            scheduled_at, location, court_id,
+            court:courts!matches_court_id_fkey(id, name),
             player1:profiles!matches_player1_id_fkey(id, full_name, avatar_url, elo),
             player2:profiles!matches_player2_id_fkey(id, full_name, avatar_url, elo)
         `)
@@ -219,6 +230,7 @@ export async function getFixture(tournamentId: string): Promise<FixtureMatch[][]
 
     const matches: FixtureMatch[] = (data ?? []).map((m: any) => ({
         ...m,
+        court: normalize(m.court),
         player1: normalize(m.player1),
         player2: normalize(m.player2),
     }));
@@ -282,4 +294,26 @@ export async function submitMatchScore(matchId: string, sets: SetScore[]) {
     }
 
     return { winnerId };
+}
+
+// ----------------------------------------------------------------
+// Programar un partido: fecha/hora + cancha (opcional) + sede (texto)
+// ----------------------------------------------------------------
+export interface MatchScheduleInput {
+    scheduled_at: string | null;
+    court_id: string | null;
+    location?: string | null;
+}
+
+export async function scheduleMatch(matchId: string, input: MatchScheduleInput) {
+    const { error } = await supabase
+        .from('matches')
+        .update({
+            scheduled_at: input.scheduled_at,
+            court_id: input.court_id,
+            location: input.location ?? null,
+        })
+        .eq('id', matchId);
+
+    if (error) throw error;
 }

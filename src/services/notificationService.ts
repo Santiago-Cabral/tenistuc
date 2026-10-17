@@ -8,6 +8,7 @@ export type NotificationType =
     | 'challenge'            // data: { type, challenge_id }
     | 'tournament_new'       // data: { type, tournament_id }
     | 'tournament_start'     // data: { type, tournament_id }
+    | 'match_scheduled'      // data: { type, match_id }
     | 'message'              // data: { type, conversation_id }
     // Tipos legados (notifyUser / código anterior)
     | 'challenge_received'
@@ -24,6 +25,7 @@ export interface NotificationData {
     challenge_id?: string;
     tournament_id?: string;
     conversation_id?: string;
+    match_id?: string;
 }
 
 export interface AppNotification {
@@ -85,6 +87,32 @@ export async function markAllAsRead(userId: string) {
 }
 
 // ----------------------------------------------------------------
+// Marca como leídas las notificaciones de tipo 'message' del usuario actual.
+// Si se pasa conversationId, solo las de esa conversación (para limpiar el
+// punto rojo al abrir un chat puntual). Sin argumento, limpia todas (al
+// abrir la bandeja de mensajes).
+// ----------------------------------------------------------------
+export async function markMessageNotificationsRead(conversationId?: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    let query = supabase
+        .from('notifications')
+        .update({ read: true, read_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .eq('type', 'message')
+        .eq('read', false);
+
+    if (conversationId) {
+        query = query.eq('data->>conversation_id', conversationId);
+    }
+
+    const { error } = await query;
+    if (error) console.warn('[notificationService] markMessageNotificationsRead:', error.message);
+}
+
+// ----------------------------------------------------------------
 // Crea una notificación in-app PARA OTRO usuario y, si tiene push token
 // guardado, le manda también la push. Usar esto en cualquier acción que
 // genere una notificación: desafiar a alguien, cargar un resultado, etc.
@@ -130,26 +158,10 @@ async function sendPushToUser(
     body: string,
     data: Record<string, any>,
 ) {
-    const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('expo_push_token')
-        .eq('id', userId)
-        .single();
-
-    if (error || !profile?.expo_push_token) return;
-
-    await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-        },
-        body: JSON.stringify({
-            to: profile.expo_push_token,
-            title,
-            body,
-            data,
-            sound: 'default',
-        }),
+    // El push se envía del lado servidor: `profiles.expo_push_token` ya no es
+    // legible por el cliente (ver migración de seguridad). La edge function
+    // `send-push` lee el token con service_role y llama a Expo.
+    await supabase.functions.invoke('send-push', {
+        body: { userId, title, body, data },
     });
 }

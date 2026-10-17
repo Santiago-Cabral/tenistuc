@@ -4,7 +4,7 @@ export type MatchType = 'friendly' | 'competitive' | 'training' | 'tournament' |
 
 export const MATCH_TYPE_LABELS: Record<MatchType, string> = {
     friendly: 'Amistoso',
-    competitive: 'Competitivo',
+    competitive: 'Por puntos',
     training: 'Entrenamiento',
     tournament: 'Torneo',
     challenge: 'Desafío',

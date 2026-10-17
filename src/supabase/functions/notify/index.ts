@@ -14,7 +14,11 @@ interface PushPayload {
 }
 
 // Export a handler compatible with Supabase Edge Functions (uses Web Fetch API)
-export default async function handler(req: Request) {
+async function handler(req: Request) {
+  if (req.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 })
+  }
+
   // Verificar secret para que solo Supabase pueda llamar esta función
   const authHeader = req.headers.get('Authorization')
   if (authHeader !== `Bearer ${process.env.NOTIFY_SECRET}`) {
@@ -142,6 +146,34 @@ export default async function handler(req: Request) {
     }
   }
 
+  // ── PARTIDO PROGRAMADO (aviso a ambos jugadores) ────────────────────────────
+  else if (
+    table === 'matches' &&
+    type === 'UPDATE' &&
+    !!record.scheduled_at &&
+    record.scheduled_at !== old_record?.scheduled_at
+  ) {
+    const when = new Date(record.scheduled_at).toLocaleString('es-AR', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Argentina/Tucuman',
+    })
+    const where = record.location ? ` en ${record.location}` : ''
+    const recipients = [record.player1_id, record.player2_id].filter(Boolean)
+
+    for (const playerId of recipients) {
+      notifications.push({
+        user_id: playerId,
+        title: 'Partido programado',
+        body: `Tu partido se juega el ${when}${where}`,
+        data: { type: 'match_scheduled', match_id: record.id },
+        type: 'match_scheduled',
+      })
+    }
+  }
+
   // ── MENSAJE NUEVO ───────────────────────────────────────────────────────────
   else if (table === 'messages' && type === 'INSERT') {
     const { data: conv } = await supabase
@@ -189,7 +221,8 @@ export default async function handler(req: Request) {
       body: notif.body,
       related_id: (notif.data.challenge_id ??
         notif.data.tournament_id ??
-        notif.data.conversation_id) as string | null,
+        notif.data.conversation_id ??
+        notif.data.match_id) as string | null,
       data: notif.data,
     })
 
@@ -212,19 +245,29 @@ export default async function handler(req: Request) {
     }
   }
 
-  // Enviar en batch a Expo (máx 100 por request)
-  if (expoPushMessages.length > 0) {
-    await fetch(EXPO_PUSH_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(expoPushMessages),
-    })
+  // Enviar a Expo en lotes de máx 100 por request.
+  for (let i = 0; i < expoPushMessages.length; i += 100) {
+    const chunk = expoPushMessages.slice(i, i + 100)
+    try {
+      const res = await fetch(EXPO_PUSH_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(chunk),
+      })
+      if (!res.ok) {
+        console.error('[notify] Expo push error', res.status, await res.text())
+      }
+    } catch (err) {
+      console.error('[notify] Expo push fetch failed', err)
+    }
   }
 
   return new Response(JSON.stringify({ sent: notifications.length }), {
     headers: { 'Content-Type': 'application/json' },
   })
 }
+
+export default { fetch: handler }

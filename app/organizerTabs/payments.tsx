@@ -62,10 +62,7 @@ export default function PaymentsScreen() {
     const pendingTotal = payments.filter((p) => p.payment_status === 'pending').length;
     const collectedTotal = payments
         .filter((p) => p.payment_status === 'paid')
-        .reduce((sum, p) => sum + (p.paid_amount ?? p.entry_fee), 0);
-    const commissionTotal = payments
-        .filter((p) => p.payment_status === 'paid')
-        .reduce((sum, p) => sum + (p.commission_amount ?? 0), 0);
+        .reduce((sum, p) => sum + (p.entry_fee ?? 0), 0);
 
     const togglePayment = async (item: PendingPayment) => {
         const nextStatus = item.payment_status === 'paid' ? 'pending' : 'paid';
@@ -82,7 +79,7 @@ export default function PaymentsScreen() {
                         userId: item.player_id,
                         type: 'tournament_registration',
                         title: 'Inscripción confirmada',
-                        body: `Tu pago fue registrado en ${item.tournament_name}. ¡Nos vemos en la cancha!`,
+                        body: `Tu lugar en ${item.tournament_name} quedó habilitado. ¡Nos vemos en la cancha!`,
                         relatedId: item.tournament_id,
                     });
                 } catch {
@@ -128,17 +125,16 @@ export default function PaymentsScreen() {
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
             <View style={styles.header}>
-                <Text style={styles.title}>Cobros</Text>
+                <Text style={styles.title}>Jugadores</Text>
                 <Text style={styles.subtitle}>
-                    {pendingTotal} pendiente{pendingTotal !== 1 ? 's' : ''} · {formatMoney(collectedTotal)} cobrado
-                    {commissionTotal > 0 ? ` · comisión tenistuc ${formatMoney(commissionTotal)}` : ''}
+                    {pendingTotal} por habilitar · {formatMoney(collectedTotal)} en inscripciones
                 </Text>
             </View>
 
             <View style={styles.filtersRow}>
                 {([
                     { key: 'pending', label: 'Pendientes' },
-                    { key: 'paid', label: 'Pagados' },
+                    { key: 'paid', label: 'Habilitados' },
                     { key: 'all', label: 'Todos' },
                 ] as { key: FilterKey; label: string }[]).map((f) => (
                     <TouchableOpacity
@@ -167,7 +163,7 @@ export default function PaymentsScreen() {
                         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
                     )}
                     renderItem={({ item: p }) => {
-                        const isPaid = p.payment_status === 'paid';
+                        const isEnabled = p.payment_status === 'paid';
                         return (
                             <View style={styles.row}>
                                 <Avatar uri={p.player_avatar} size={44} />
@@ -176,11 +172,6 @@ export default function PaymentsScreen() {
                                     <Text style={styles.rowMeta} numberOfLines={1}>
                                         {p.tournament_name} · {formatDate(p.registered_at)}
                                     </Text>
-                                    {isPaid && p.commission_amount ? (
-                                        <Text style={[styles.rowMeta, { color: Colors.tertiary }]}>
-                                            comisión tenistuc {formatMoney(p.commission_amount)}
-                                        </Text>
-                                    ) : null}
                                 </View>
                                 <View style={styles.rowRight}>
                                     <Text style={styles.rowFee}>{formatMoney(p.entry_fee)}</Text>
@@ -192,21 +183,21 @@ export default function PaymentsScreen() {
                                         <Ionicons name="notifications-outline" size={16} color={Colors.primary} />
                                     </TouchableOpacity>
                                     <TouchableOpacity
-                                        style={[styles.statusBtn, isPaid ? styles.statusBtnPaid : styles.statusBtnPending]}
+                                        style={[styles.statusBtn, isEnabled ? styles.statusBtnPaid : styles.statusBtnPending]}
                                         onPress={() => togglePayment(p)}
                                         disabled={updatingId === p.id}
                                     >
                                         {updatingId === p.id ? (
-                                            <ActivityIndicator size="small" color={isPaid ? Colors.primary : Colors.onSurfaceVariant} />
+                                            <ActivityIndicator size="small" color={isEnabled ? Colors.primary : Colors.onSurfaceVariant} />
                                         ) : (
                                             <>
                                                 <Ionicons
-                                                    name={isPaid ? 'checkmark-circle' : 'time-outline'}
+                                                    name={isEnabled ? 'checkmark-circle' : 'add-circle-outline'}
                                                     size={14}
-                                                    color={isPaid ? Colors.primary : Colors.onSurfaceVariant}
+                                                    color={isEnabled ? Colors.primary : Colors.onSurfaceVariant}
                                                 />
-                                                <Text style={[styles.statusBtnText, { color: isPaid ? Colors.primary : Colors.onSurfaceVariant }]}>
-                                                    {isPaid ? 'Pagado' : 'Pendiente'}
+                                                <Text style={[styles.statusBtnText, { color: isEnabled ? Colors.primary : Colors.onSurfaceVariant }]}>
+                                                    {isEnabled ? 'Habilitado' : 'Habilitar'}
                                                 </Text>
                                             </>
                                         )}
@@ -220,7 +211,7 @@ export default function PaymentsScreen() {
                         <View style={styles.centered}>
                             <Ionicons name="card-outline" size={48} color={Colors.onSurfaceVariant} />
                             <Text style={styles.emptyText}>
-                                {filter === 'pending' ? 'No hay pagos pendientes.' : 'No hay inscripciones todavía.'}
+                                {filter === 'pending' ? 'No hay jugadores por habilitar.' : 'No hay inscripciones todavía.'}
                             </Text>
                         </View>
                     }

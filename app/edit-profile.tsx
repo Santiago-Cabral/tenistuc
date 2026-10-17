@@ -203,7 +203,7 @@ export default function EditProfileScreen() {
                                 {uploadingPhoto ? (
                                     <ActivityIndicator color="#fff" size="small" />
                                 ) : (
-                                    <Ionicons name="camera" size={22} color="#fff" />
+                                    <Ionicons name="image-outline" size={22} color="#fff" />
                                 )}
                             </View>
                         </TouchableOpacity>

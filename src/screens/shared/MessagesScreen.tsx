@@ -12,6 +12,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { isActuallyOnline } from '../../services/presenceService';
+import { markMessageNotificationsRead } from '../../services/notificationService';
 
 interface Conversation {
     id: string;
@@ -93,6 +94,12 @@ export default function MessagesScreen() {
             .subscribe();
         return () => { supabase.removeChannel(sub); supabase.removeChannel(presenceSub); };
     }, [loadConversations]);
+
+    useEffect(() => {
+        // Al abrir la bandeja, las notificaciones de mensajes quedan leídas:
+        // se apaga el punto rojo del ícono de Mensajes.
+        markMessageNotificationsRead();
+    }, []);
 
     const handleRefresh = () => {
         setRefreshing(true);

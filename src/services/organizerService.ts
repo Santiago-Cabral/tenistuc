@@ -63,11 +63,6 @@ export interface PendingPayment {
     payment_status: 'pending' | 'paid' | 'refunded';
     registered_at: string;
     entry_fee: number;
-    // MercadoPago
-    mp_status: string | null;
-    paid_amount: number | null;
-    commission_amount: number | null;
-    paid_at: string | null;
 }
 
 const normalize = (val: any) => (Array.isArray(val) ? val[0] ?? null : val);
@@ -310,7 +305,6 @@ export async function getPayments(organizerId: string): Promise<PendingPayment[]
         .from('tournament_registrations')
         .select(`
             id, tournament_id, payment_status, registered_at,
-            mp_status, paid_amount, commission_amount, paid_at,
             player:profiles!tournament_registrations_player_id_fkey(id, full_name, avatar_url)
         `)
         .in('tournament_id', tournamentIds)
@@ -330,10 +324,6 @@ export async function getPayments(organizerId: string): Promise<PendingPayment[]
             payment_status: r.payment_status,
             registered_at: r.registered_at,
             entry_fee: feeByTournament.get(r.tournament_id) ?? 0,
-            mp_status: r.mp_status ?? null,
-            paid_amount: r.paid_amount ?? null,
-            commission_amount: r.commission_amount ?? null,
-            paid_at: r.paid_at ?? null,
         };
     });
 }

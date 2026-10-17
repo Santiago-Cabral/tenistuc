@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import { useChallenges } from '../../hooks/useChallenges';
+import { MATCH_TYPE_LABELS, type MatchType } from '../../services/matchService';
 import { Avatar } from '../ui';
 
 interface Props {
@@ -36,6 +37,17 @@ const VENUES = [
     'Otro',
 ];
 
+const MATCH_TYPES: {
+    value: MatchType;
+    title: string;
+    subtitle: string;
+    icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+    { value: 'friendly', title: MATCH_TYPE_LABELS.friendly, subtitle: 'Sin puntos', icon: 'happy-outline' },
+    { value: 'training', title: MATCH_TYPE_LABELS.training, subtitle: 'A practicar', icon: 'barbell-outline' },
+    { value: 'competitive', title: MATCH_TYPE_LABELS.competitive, subtitle: '5 pts', icon: 'trophy-outline' },
+];
+
 export default function CreateChallengeModal({
     visible,
     onClose,
@@ -45,6 +57,7 @@ export default function CreateChallengeModal({
     onCreated,
 }: Props) {
     const { createChallenge } = useChallenges();
+    const [matchType, setMatchType] = useState<MatchType>('friendly');
     const [date, setDate] = useState<Date | null>(null);
     const [venue, setVenue] = useState('');
     const [message, setMessage] = useState('');
@@ -52,6 +65,7 @@ export default function CreateChallengeModal({
     const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
 
     const reset = () => {
+        setMatchType('friendly');
         setDate(null);
         setVenue('');
         setMessage('');
@@ -114,7 +128,7 @@ export default function CreateChallengeModal({
             proposedDate: date.toISOString(),
             proposedVenue: venue,
             message: message || undefined,
-            matchType: 'friendly',
+            matchType,
         });
 
         setLoading(false);
@@ -137,7 +151,7 @@ export default function CreateChallengeModal({
                         <View style={{ flex: 1 }}>
                             <Text style={styles.title}>Desafiar a {rivalName}</Text>
                             <Text style={styles.subtitle}>
-                                Proponé fecha, sede y un mensaje. El rival podrá aceptar o reproponer.
+                                Elegí el tipo, fecha, sede y un mensaje. El rival podrá aceptar o reproponer.
                             </Text>
                         </View>
                         <TouchableOpacity onPress={handleClose} disabled={loading}>
@@ -146,6 +160,36 @@ export default function CreateChallengeModal({
                     </View>
 
                     <ScrollView showsVerticalScrollIndicator={false} style={styles.body}>
+                        <Text style={styles.label}>Tipo de desafío</Text>
+                        <View style={styles.typeRow}>
+                            {MATCH_TYPES.map((opt) => {
+                                const active = matchType === opt.value;
+                                return (
+                                    <TouchableOpacity
+                                        key={opt.value}
+                                        onPress={() => setMatchType(opt.value)}
+                                        activeOpacity={0.8}
+                                        style={[styles.typeCard, active && styles.typeCardActive]}
+                                    >
+                                        <Ionicons
+                                            name={opt.icon}
+                                            size={20}
+                                            color={active ? Colors.primaryDim : Colors.onSurfaceVariant}
+                                        />
+                                        <Text style={[styles.typeTitle, active && styles.typeTitleActive]}>
+                                            {opt.title}
+                                        </Text>
+                                        <Text style={[styles.typeSub, active && styles.typeSubActive]}>
+                                            {opt.subtitle}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                        {matchType === 'competitive' && (
+                            <Text style={styles.typeNote}>El ganador suma 5 puntos.</Text>
+                        )}
+
                         <Text style={styles.label}>Fecha y hora</Text>
                         <View style={styles.dateRow}>
                             <TouchableOpacity style={styles.dateBtn} onPress={openDatePicker}>
@@ -236,6 +280,24 @@ const styles = StyleSheet.create({
     subtitle: { ...Typography.bodySm, color: Colors.onSurfaceVariant, marginTop: 2 },
     body: { flexGrow: 0 },
     label: { ...Typography.labelLg, color: Colors.onSurface, marginTop: Spacing.base, marginBottom: Spacing.sm },
+    typeRow: { flexDirection: 'row', gap: Spacing.sm },
+    typeCard: {
+        flex: 1,
+        alignItems: 'center',
+        gap: 2,
+        paddingVertical: Spacing.base,
+        paddingHorizontal: Spacing.sm,
+        borderRadius: Radius.lg,
+        borderWidth: 1,
+        borderColor: Colors.surfaceContainerHigh,
+        backgroundColor: Colors.surfaceContainerLowest,
+    },
+    typeCardActive: { backgroundColor: Colors.primaryContainer, borderColor: Colors.primary },
+    typeTitle: { ...Typography.labelMd, color: Colors.onSurface },
+    typeTitleActive: { color: Colors.primaryDim },
+    typeSub: { ...Typography.labelSm, color: Colors.onSurfaceVariant },
+    typeSubActive: { color: Colors.primaryDim },
+    typeNote: { ...Typography.bodySm, color: Colors.onSurfaceVariant, marginTop: Spacing.sm },
     input: {
         borderWidth: 1,
         borderColor: Colors.surfaceContainerHigh,

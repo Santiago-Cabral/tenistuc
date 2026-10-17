@@ -7,4 +7,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     googleServicesFile:
       process.env.GOOGLE_SERVICES_FILE ?? './google-services.json',
   },
+  plugins: [...((config as ExpoConfig).plugins ?? []), 'expo-web-browser'],
 });

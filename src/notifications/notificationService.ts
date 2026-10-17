@@ -69,24 +69,8 @@ export async function registerForPushNotifications(): Promise<string | null> {
     return null
   }
 
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'TenisTuc',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#2D6A4F',
-    })
-  }
-
-  const { status: existing } = await Notifications.getPermissionsAsync()
-  let finalStatus = existing
-
-  if (existing !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync()
-    finalStatus = status
-  }
-
-  if (finalStatus !== 'granted') {
+  const granted = await ensureNotificationPermission(Notifications)
+  if (!granted) {
     console.warn('[Notifications] Permiso denegado')
     return null
   }
@@ -106,6 +90,32 @@ export async function registerForPushNotifications(): Promise<string | null> {
     console.warn('[Notifications] No se pudo obtener el push token:', e.message ?? e)
     return null
   }
+}
+
+// Crea el canal de Android y pide el permiso de notificaciones (POST_NOTIFICATIONS
+// en Android 13+). Se llama al abrir la app, sin depender de que haya sesión.
+export async function ensureNotificationPermission(
+  notifications?: any,
+): Promise<boolean> {
+  if (!isPushAvailable()) return false
+
+  const Notifications = notifications ?? (await loadNotifications())
+  if (!Notifications) return false
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'TenisTuc',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#2D6A4F',
+    })
+  }
+
+  const { status: existing } = await Notifications.getPermissionsAsync()
+  if (existing === 'granted') return true
+
+  const { status } = await Notifications.requestPermissionsAsync()
+  return status === 'granted'
 }
 
 export async function savePushToken(userId: string, token: string) {

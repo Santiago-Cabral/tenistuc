@@ -17,17 +17,44 @@ returns trigger
 language plpgsql
 security definer set search_path = public
 as $$
+declare
+    base_username text;
+    candidate text;
+    n int := 0;
 begin
-    insert into public.profiles (id, username, full_name, role, level)
-    values (
-        new.id,
-        coalesce(new.raw_user_meta_data ->> 'username', split_part(new.email, '@', 1)),
-        coalesce(new.raw_user_meta_data ->> 'full_name', ''),
-        coalesce(new.raw_user_meta_data ->> 'role', 'athlete'),
-        coalesce(new.raw_user_meta_data ->> 'level', 'Amateur I')
-    )
-    on conflict (id) do nothing;
-    return new;
+    -- El registro local manda un username; los logins OAuth (Google/Apple) no,
+    -- así que usamos el prefijo del email y, si colisiona, le agregamos sufijo.
+    base_username := coalesce(
+        nullif(new.raw_user_meta_data ->> 'username', ''),
+        nullif(split_part(coalesce(new.email, ''), '@', 1), ''),
+        'jugador'
+    );
+
+    candidate := base_username;
+    loop
+        begin
+            insert into public.profiles (id, username, full_name, role, level)
+            values (
+                new.id,
+                candidate,
+                coalesce(
+                    nullif(new.raw_user_meta_data ->> 'full_name', ''),
+                    nullif(new.raw_user_meta_data ->> 'name', ''),
+                    ''
+                ),
+                coalesce(new.raw_user_meta_data ->> 'role', 'athlete'),
+                coalesce(new.raw_user_meta_data ->> 'level', 'Amateur I')
+            )
+            on conflict (id) do nothing;
+            return new;
+        exception when unique_violation then
+            n := n + 1;
+            candidate := case
+                when n <= 1000 then base_username || n::text
+                else base_username || '_' || floor(random() * 1000000)::text
+            end;
+        end;
+    end loop;
 end;
 $$;
 
@@ -474,15 +501,24 @@ create policy "Public avatars read" on storage.objects
 
 drop policy if exists "Users can upload avatars" on storage.objects;
 create policy "Users can upload avatars" on storage.objects
-    for insert to authenticated with check (bucket_id = 'avatars');
+    for insert to authenticated with check (
+        bucket_id = 'avatars'
+        and (storage.foldername(name))[1] = auth.uid()::text
+    );
 
 drop policy if exists "Users can update their avatars" on storage.objects;
 create policy "Users can update their avatars" on storage.objects
-    for update to authenticated using (bucket_id = 'avatars');
+    for update to authenticated using (
+        bucket_id = 'avatars'
+        and (storage.foldername(name))[1] = auth.uid()::text
+    );
 
 drop policy if exists "Users can delete their avatars" on storage.objects;
 create policy "Users can delete their avatars" on storage.objects
-    for delete to authenticated using (bucket_id = 'avatars');
+    for delete to authenticated using (
+        bucket_id = 'avatars'
+        and (storage.foldername(name))[1] = auth.uid()::text
+    );
 
 -- ──────────────────────────────────────────────────────────────
 -- 14) ROW LEVEL SECURITY
@@ -509,6 +545,12 @@ create policy "Profiles are publicly viewable" on public.profiles
 drop policy if exists "Users can update their own profile" on public.profiles;
 create policy "Users can update their own profile" on public.profiles
     for update using (auth.uid() = id);
+
+-- El token push solo lo lee el servidor (edge functions con service_role).
+-- Se revoca la lectura de la columna para clientes anon/authenticated: el
+-- cliente ya no hace select sobre expo_push_token (ver PROFILE_COLUMNS en
+-- src/stores/authStore.ts y send-push en src/supabase/functions/).
+revoke select (expo_push_token) on public.profiles from anon, authenticated;
 
 -- CONVERSATIONS
 drop policy if exists "Participants can view conversations" on public.conversations;
@@ -678,12 +720,19 @@ alter table public.profiles
     add column if not exists privacy_consented_at timestamptz,
     add column if not exists privacy_policy_version text;
 
+-- horario y cancha asignados a cada partido del fixture (organizador)
+alter table public.matches
+    add column if not exists court_id uuid references public.courts (id) on delete set null;
+create index if not exists idx_matches_court on public.matches (court_id);
+
 -- ──────────────────────────────────────────────────────────────
 -- 15) WEBHOOKS DEL DASHBOARD (configurar en Database → Webhooks)
 --    La edge function `notify` recibe evento por evento. Configurar:
 --      · challenges              INSERT              → /functions/v1/notify
 --      · tournaments             INSERT, UPDATE      → /functions/v1/notify
 --      · tournament_registrations INSERT, UPDATE     → /functions/v1/notify
+--      · matches                 UPDATE              → /functions/v1/notify
+--                                  (push "partido programado" a ambos jugadores)
 --      · messages                INSERT              → /functions/v1/notify
 --    Todas con header  Authorization: Bearer NOTIFY_SECRET
 --    (el mismo valor que la variable NOTIFY_SECRET de la edge function).
@@ -699,15 +748,20 @@ alter table public.profiles
 -- CORRER ESTO ABOJO/O EN EL SQL EDITOR si profiles aún no está en
 -- la publicación supabase_realtime (la presencia en vivo lo necesita):
 do $$
+declare
+  t text;
 begin
-  if not exists (
-    select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime'
-      and schemaname = 'public'
-      and tablename = 'profiles'
-  ) then
-    alter publication supabase_realtime add table public.profiles;
-  end if;
+  foreach t in array array['profiles', 'messages', 'conversations', 'notifications']
+  loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
 end $$;
 
 -- ──────────────────────────────────────────────────────────────

@@ -8,10 +8,13 @@ import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../src/theme/index';
 import { Avatar, Badge, EloIndicator, Card, SectionHeader, Button } from '../../src/components/ui/index';
 import { useAuthStore } from '../../src/stores/authStore';
+import { useChallenges } from '../../src/hooks/useChallenges';
+import { MATCH_TYPE_LABELS } from '../../src/services/matchService';
 import { supabase } from '../../src/lib/supabase';
 import { isActuallyOnline } from '../../src/services/presenceService';
 
@@ -42,7 +45,33 @@ interface Tournament {
     prize_money: number;
     elo_points: number;
     starts_at: string | null;
+    location: string | null;
 }
+
+interface ChallengeItem {
+    id: string;
+    challenger_id: string;
+    challenged_id: string;
+    match_type: string;
+    proposed_date: string | null;
+    proposed_venue: string | null;
+    proposed_by: string | null;
+    message: string | null;
+    created_at: string;
+    challenger: PlayerSnippet | null;
+    challenged: PlayerSnippet | null;
+}
+
+const TOURNEY_FALLBACK =
+    'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=600';
+
+const TOURNEY_CARD_WIDTH = 280;
+
+const TOURNEY_STATUS: Record<string, { label: string; color: string; textColor: string }> = {
+    open: { label: 'INSCRIPCIONES ABIERTAS', color: Colors.primaryContainer, textColor: Colors.primary },
+    closed: { label: 'LISTA CERRADA', color: Colors.tertiaryContainer, textColor: Colors.tertiary },
+    in_progress: { label: 'EN JUEGO', color: Colors.tertiaryContainer, textColor: Colors.tertiary },
+};
 
 interface RecentResult {
     id: string;
@@ -77,17 +106,20 @@ function getGreeting(): string {
 export default function HomeScreen() {
     const router = useRouter();
     const { profile } = useAuthStore();
+    const { acceptChallenge, rejectChallenge } = useChallenges();
     const [matches, setMatches] = useState<MatchWithPlayers[]>([]);
+    const [challenges, setChallenges] = useState<ChallengeItem[]>([]);
     const [tournaments, setTournaments] = useState<Tournament[]>([]);
     const [globalRank, setGlobalRank] = useState<number | null>(null);
     const [eloDelta, setEloDelta] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
     const [loadingId, setLoadingId] = useState<string | null>(null);
+    const [challengeActionId, setChallengeActionId] = useState<string | null>(null);
 
     const loadData = useCallback(async () => {
         if (!profile) return;
 
-        const [matchRes, tourneyRes, rankRes, recentRes] = await Promise.all([
+        const [matchRes, tourneyRes, rankRes, recentRes, challengeRes] = await Promise.all([
             supabase
                 .from('matches')
                 .select(`
@@ -103,10 +135,10 @@ export default function HomeScreen() {
 
             supabase
                 .from('tournaments')
-                .select('id, name, status, image_url, prize_money, elo_points, starts_at')
+                .select('id, name, status, image_url, prize_money, elo_points, starts_at, location')
                 .in('status', ['open', 'closed', 'in_progress'])
                 .order('created_at', { ascending: false })
-                .limit(3),
+                .limit(6),
 
             supabase
                 .from('profiles')
@@ -120,6 +152,19 @@ export default function HomeScreen() {
                 .eq('status', 'completed')
                 .order('played_at', { ascending: false })
                 .limit(5),
+
+            supabase
+                .from('challenges')
+                .select(`
+                    id, challenger_id, challenged_id, match_type, proposed_date,
+                    proposed_venue, proposed_by, message, created_at,
+                    challenger:profiles!challenges_challenger_id_fkey(id, username, full_name, avatar_url),
+                    challenged:profiles!challenges_challenged_id_fkey(id, username, full_name, avatar_url)
+                `)
+                .or(`challenger_id.eq.${profile.id},challenged_id.eq.${profile.id}`)
+                .eq('status', 'pending')
+                .order('created_at', { ascending: false })
+                .limit(4),
         ]);
 
         if (matchRes.data) {
@@ -129,6 +174,15 @@ export default function HomeScreen() {
                 player2: Array.isArray(m.player2) ? m.player2[0] ?? null : m.player2,
             }));
             setMatches(normalized);
+        }
+
+        if (challengeRes.data) {
+            const normalized: ChallengeItem[] = (challengeRes.data as any[]).map(c => ({
+                ...c,
+                challenger: Array.isArray(c.challenger) ? c.challenger[0] ?? null : c.challenger,
+                challenged: Array.isArray(c.challenged) ? c.challenged[0] ?? null : c.challenged,
+            }));
+            setChallenges(normalized);
         }
 
         if (tourneyRes.data) setTournaments(tourneyRes.data as Tournament[]);
@@ -185,6 +239,28 @@ export default function HomeScreen() {
         ]);
     };
 
+    const respondToChallenge = (challengeId: string, accept: boolean) => {
+        const doIt = async () => {
+            setChallengeActionId(challengeId);
+            const ok = accept
+                ? await acceptChallenge(challengeId)
+                : await rejectChallenge(challengeId);
+            setChallengeActionId(null);
+            if (ok) loadData();
+            else showAlert('Error', 'No se pudo procesar el desafío.');
+        };
+
+        if (accept) {
+            doIt();
+            return;
+        }
+
+        showAlert('Rechazar desafío', '¿Seguro que querés rechazar este desafío?', [
+            { text: 'No', style: 'cancel' },
+            { text: 'Sí, rechazar', style: 'destructive', onPress: doIt },
+        ]);
+    };
+
     const wins = profile?.wins ?? 0;
     const losses = profile?.losses ?? 0;
     const winrate = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
@@ -200,10 +276,109 @@ export default function HomeScreen() {
     const getRival = (match: MatchWithPlayers) =>
         match.player1_id === profile?.id ? match.player2 : match.player1;
 
+    const getChallengeRival = (c: ChallengeItem) =>
+        c.challenger_id === profile?.id ? c.challenged : c.challenger;
+
+    const formatTourneyDate = (iso: string | null) => {
+        if (!iso) return 'Fecha a confirmar';
+        return new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+    };
+
+    // Los desafíos donde me toca responder van primero (necesitan acción).
+    const orderedChallenges = [
+        ...challenges.filter(c => c.proposed_by !== profile?.id),
+        ...challenges.filter(c => c.proposed_by === profile?.id),
+    ];
+
     const nextMatch = matches.find(m => !!m.scheduled_at) ?? null;
     const daysToNext = nextMatch?.scheduled_at
         ? Math.round((new Date(nextMatch.scheduled_at).getTime() - Date.now()) / 86_400_000)
         : null;
+
+    const renderChallengeCard = (c: ChallengeItem) => {
+        const rival = getChallengeRival(c);
+        const myTurn = c.proposed_by !== profile?.id;
+        const busy = challengeActionId === c.id;
+        const typeLabel =
+            MATCH_TYPE_LABELS[c.match_type as keyof typeof MATCH_TYPE_LABELS] ?? c.match_type;
+
+        return (
+            <Card key={c.id} style={styles.matchCard}>
+                <View style={styles.matchTop}>
+                    <Badge label="DESAFÍO" color={Colors.primaryContainer} textColor={Colors.primary} />
+                    <Badge
+                        label={typeLabel.toUpperCase()}
+                        color={Colors.surfaceContainerHigh}
+                        textColor={Colors.onSurfaceVariant}
+                    />
+                    {myTurn && (
+                        <Badge label="TU TURNO" color={Colors.tertiaryContainer} textColor={Colors.tertiary} />
+                    )}
+                </View>
+
+                <View style={styles.matchDateRow}>
+                    <Ionicons name="calendar-outline" size={13} color={Colors.onSurfaceVariant} />
+                    <Text style={styles.matchDate}>
+                        {c.proposed_date ? formatDate(c.proposed_date) : 'Sin fecha definida'}
+                    </Text>
+                    {c.proposed_venue && (
+                        <>
+                            <Ionicons name="location-outline" size={13} color={Colors.onSurfaceVariant} />
+                            <Text style={styles.matchDate}>{c.proposed_venue}</Text>
+                        </>
+                    )}
+                </View>
+
+                <View style={styles.matchVs}>
+                    <View style={styles.matchPlayer}>
+                        <Avatar uri={profile?.avatar_url} size={44} />
+                        <Text style={styles.matchPlayerName}>
+                            {profile?.full_name?.split(' ')[0] ?? 'Tú'}
+                        </Text>
+                    </View>
+                    <View style={styles.vsWrap}>
+                        <Text style={styles.vsText}>VS</Text>
+                    </View>
+                    <View style={styles.matchPlayer}>
+                        <Avatar uri={rival?.avatar_url} size={44} />
+                        <Text style={styles.matchPlayerName}>
+                            {rival?.full_name?.split(' ')[0] ?? rival?.username ?? 'Rival'}
+                        </Text>
+                    </View>
+                </View>
+
+                {myTurn ? (
+                    <View style={styles.matchBtns}>
+                        <Button
+                            label="Rechazar"
+                            variant="ghost"
+                            onPress={() => respondToChallenge(c.id, false)}
+                            disabled={busy}
+                            style={{ flex: 1 }}
+                        />
+                        <Button
+                            label={busy ? 'Aceptando...' : 'Aceptar'}
+                            onPress={() => respondToChallenge(c.id, true)}
+                            disabled={busy}
+                            style={{ flex: 1 }}
+                        />
+                    </View>
+                ) : (
+                    <TouchableOpacity
+                        onPress={() => router.push(`/challenge/${c.id}` as any)}
+                        style={styles.waitingRow}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="hourglass-outline" size={14} color={Colors.onSurfaceVariant} />
+                        <Text style={styles.waitingText}>
+                            Esperando respuesta de {rival?.full_name?.split(' ')[0] ?? 'el rival'}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
+                    </TouchableOpacity>
+                )}
+            </Card>
+        );
+    };
 
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
@@ -321,17 +496,17 @@ export default function HomeScreen() {
                         )}
                     </Card>
 
-                    {/* ── Próximos Partidos ── */}
+                    {/* ── Desafíos pendientes + Próximos partidos ── */}
                     <SectionHeader
-                        title="Próximos Partidos"
+                        title="Desafíos y partidos"
                         action="Ver todos"
                         onAction={() => router.push('/matches' as any)}
                     />
 
-                    {matches.length === 0 ? (
+                    {challenges.length === 0 && matches.length === 0 ? (
                         <Card style={styles.emptyCard}>
                             <Ionicons name="tennisball-outline" size={40} color={Colors.onSurfaceVariant} />
-                            <Text style={styles.emptyText}>Sin partidos programados</Text>
+                            <Text style={styles.emptyText}>No tenés desafíos ni partidos</Text>
                             <Button
                                 label="Buscar rival"
                                 variant="ghost"
@@ -340,7 +515,9 @@ export default function HomeScreen() {
                             />
                         </Card>
                     ) : (
-                        matches.map(match => {
+                        <>
+                            {orderedChallenges.map(renderChallengeCard)}
+                            {matches.map(match => {
                             const rival = getRival(match);
                             const isLoading = loadingId === match.id;
                             return (
@@ -417,7 +594,8 @@ export default function HomeScreen() {
                                     )}
                                 </Card>
                             );
-                        })
+                        })}
+                        </>
                     )}
 
                     {/* ── Torneos Activos ── */}
@@ -433,35 +611,66 @@ export default function HomeScreen() {
                             <Text style={styles.emptyText}>Sin torneos activos</Text>
                         </Card>
                     ) : (
-                        tournaments.map(t => (
-                            <TouchableOpacity
-                                key={t.id}
-                                style={styles.tourneyCard}
-                                onPress={() => router.push(`/tournament/${t.id}` as any)}
-                                activeOpacity={0.9}
-                            >
-                                <LinearGradient
-                                    colors={[Colors.primary, Colors.primaryDim]}
-                                    style={StyleSheet.absoluteFill}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                />
-                                <View style={styles.tourneyContent}>
-                                    <Badge
-                                        label={t.status === 'open' ? 'INSCRIPCIONES ABIERTAS' : t.status === 'closed' ? 'LISTA CERRADA' : 'EN JUEGO'}
-                                        color={t.status === 'closed' ? Colors.tertiaryContainer : Colors.primaryContainer}
-                                        textColor={t.status === 'closed' ? Colors.tertiary : Colors.primary}
-                                    />
-                                    <Text style={styles.tourneyName}>{t.name}</Text>
-                                    <View style={styles.tourneyMeta}>
-                                        <Ionicons name="cash-outline" size={13} color="rgba(255,255,255,0.75)" />
-                                        <Text style={styles.tourneyPrize}>
-                                            ${Number(t.prize_money).toLocaleString('es')} + {t.elo_points} pts
-                                        </Text>
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                        ))
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.tourneyScrollBleed}
+                            contentContainerStyle={styles.tourneyScroll}
+                            snapToInterval={TOURNEY_CARD_WIDTH + Spacing.base}
+                            decelerationRate="fast"
+                        >
+                            {tournaments.map(t => {
+                                const st = TOURNEY_STATUS[t.status] ?? TOURNEY_STATUS.open;
+                                return (
+                                    <TouchableOpacity
+                                        key={t.id}
+                                        style={styles.tourneyCard}
+                                        onPress={() => router.push(`/tournament/${t.id}` as any)}
+                                        activeOpacity={0.9}
+                                    >
+                                        <Image
+                                            source={{ uri: t.image_url || TOURNEY_FALLBACK }}
+                                            style={StyleSheet.absoluteFill}
+                                            contentFit="cover"
+                                            transition={200}
+                                        />
+                                        <LinearGradient
+                                            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.78)']}
+                                            style={StyleSheet.absoluteFill}
+                                        />
+                                        <View style={styles.tourneyBadgeWrap}>
+                                            <Badge label={st.label} color={st.color} textColor={st.textColor} />
+                                        </View>
+                                        <View style={styles.tourneyContent}>
+                                            <Text style={styles.tourneyName} numberOfLines={2}>
+                                                {t.name}
+                                            </Text>
+                                            <View style={styles.tourneyMetaRow}>
+                                                <Ionicons name="calendar-outline" size={12} color="rgba(255,255,255,0.85)" />
+                                                <Text style={styles.tourneyMetaText}>
+                                                    {formatTourneyDate(t.starts_at)}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.tourneyMetaRow}>
+                                                <Ionicons name="cash-outline" size={12} color="rgba(255,255,255,0.85)" />
+                                                <Text style={styles.tourneyMetaText}>
+                                                    ${Number(t.prize_money).toLocaleString('es')} + {t.elo_points} pts
+                                                </Text>
+                                                {!!t.location && (
+                                                    <>
+                                                        <View style={styles.tourneyDot} />
+                                                        <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.85)" />
+                                                        <Text style={styles.tourneyMetaText} numberOfLines={1}>
+                                                            {t.location}
+                                                        </Text>
+                                                    </>
+                                                )}
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
                     )}
 
                 </View>
@@ -539,12 +748,19 @@ const styles = StyleSheet.create({
     matchBtns: { flexDirection: 'row', gap: Spacing.sm },
     rejectLink: { alignItems: 'center', paddingTop: 2 },
     rejectLinkText: { ...Typography.labelSm, color: Colors.error },
+    waitingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 2 },
+    waitingText: { ...Typography.bodySm, color: Colors.onSurfaceVariant, flex: 1 },
+
+    tourneyScrollBleed: { marginHorizontal: -Spacing.xl },
+    tourneyScroll: { paddingHorizontal: Spacing.xl, gap: Spacing.base },
     tourneyCard: {
-        height: 160, borderRadius: Radius.xl, overflow: 'hidden',
+        width: TOURNEY_CARD_WIDTH, height: 168, borderRadius: Radius.xl, overflow: 'hidden',
         justifyContent: 'flex-end', ...Shadow.ambient,
     },
+    tourneyBadgeWrap: { position: 'absolute', top: Spacing.base, left: Spacing.base },
     tourneyContent: { padding: Spacing.base, gap: 4 },
-    tourneyName: { fontFamily: 'Lexend_700Bold', fontSize: 20, color: '#fff', letterSpacing: -0.5 },
-    tourneyMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    tourneyPrize: { ...Typography.bodySm, color: 'rgba(255,255,255,0.75)' },
+    tourneyName: { fontFamily: 'Lexend_700Bold', fontSize: 19, color: '#fff', letterSpacing: -0.4 },
+    tourneyMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    tourneyMetaText: { ...Typography.bodySm, color: 'rgba(255,255,255,0.85)' },
+    tourneyDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.7)', marginHorizontal: 2 },
 });

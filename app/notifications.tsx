@@ -31,6 +31,7 @@ const TYPE_THEME: Record<NotificationType, IconConfig> = {
     tournament_registration: { icon: 'trophy', bg: Colors.tertiaryContainer, fg: Colors.onTertiaryContainer },
     tournament_update: { icon: 'megaphone', bg: Colors.tertiaryContainer, fg: Colors.onTertiaryContainer },
     fixture_ready: { icon: 'list', bg: Colors.tertiaryContainer, fg: Colors.onTertiaryContainer },
+    match_scheduled: { icon: 'calendar', bg: Colors.primaryContainer, fg: Colors.primaryDim },
     message: { icon: 'chatbubble', bg: Colors.secondaryContainer, fg: Colors.onSecondaryContainer },
     match_result: { icon: 'tennisball', bg: Colors.primaryContainer, fg: Colors.primaryDim },
     match_confirmed: { icon: 'shield-checkmark', bg: Colors.primaryContainer, fg: Colors.primaryDim },
@@ -63,6 +64,7 @@ function routeFor(n: AppNotification): string | null {
         n.data?.challenge_id ??
         n.data?.tournament_id ??
         n.data?.conversation_id ??
+        n.data?.match_id ??
         n.related_id;
 
     switch (n.type) {
@@ -83,6 +85,7 @@ function routeFor(n: AppNotification): string | null {
             return targetId ? `/tournament/${targetId}` : '/athleteTabs/tournament';
         case 'match_result':
         case 'match_confirmed':
+        case 'match_scheduled':
             return '/matches';
         default:
             return null;

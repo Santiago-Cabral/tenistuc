@@ -14,7 +14,9 @@ import { useAuthStore } from '../../src/stores/authStore';
 import {
     generateFixture, getFixture, FixtureMatch,
 } from '../../src/services/fixtureService';
+import { getCourts, Court } from '../../src/services/organizerService';
 import MatchScoreModal from '../../src/components/modals/MatchScoreModal';
+import MatchScheduleModal, { ScheduleBooking } from '../../src/components/modals/MatchScheduleModal';
 
 interface TournamentOption {
     id: string;
@@ -30,13 +32,25 @@ function roundLabel(round: number, totalRounds: number) {
     return `Ronda ${round}`;
 }
 
+function formatSchedule(iso: string) {
+    const d = new Date(iso);
+    const day = d.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' });
+    const time = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    return `${day} · ${time}`;
+}
+
 function MatchCard({
-    match, totalRounds, onPress,
-}: { match: FixtureMatch; totalRounds: number; onPress: () => void }) {
+    match, onPress, onSchedule,
+}: { match: FixtureMatch; totalRounds: number; onPress: () => void; onSchedule: () => void }) {
     const winnerId = match.score?.winner_id;
     const isCompleted = match.status === 'completed';
     const canLoad = !isCompleted && match.player1_id && match.player2_id;
+    const canSchedule = !match.is_bye && !isCompleted;
     const sets = match.score?.sets ?? [];
+
+    const scheduleLabel = match.scheduled_at
+        ? `${formatSchedule(match.scheduled_at)}${match.court?.name ? ` · ${match.court.name}` : ''}`
+        : 'Sin programar';
 
     const renderPlayer = (
         player: FixtureMatch['player1'],
@@ -60,36 +74,64 @@ function MatchCard({
     );
 
     return (
-        <TouchableOpacity
-            style={[styles.matchCard, match.is_bye && styles.matchCardBye]}
-            onPress={onPress}
-            disabled={!canLoad}
-        >
-            {renderPlayer(match.player1, winnerId === match.player1_id)}
-            <View style={styles.matchDivider} />
-            {renderPlayer(match.player2, winnerId === match.player2_id)}
+        <View style={[styles.matchCard, match.is_bye && styles.matchCardBye]}>
+            <TouchableOpacity
+                style={styles.matchBody}
+                onPress={onPress}
+                disabled={!canLoad}
+                activeOpacity={0.85}
+            >
+                {renderPlayer(match.player1, winnerId === match.player1_id)}
+                <View style={styles.matchDivider} />
+                {renderPlayer(match.player2, winnerId === match.player2_id)}
 
-            {match.is_bye && (
-                <Text style={styles.byeLabel}>BYE</Text>
-            )}
+                {match.is_bye && (
+                    <Text style={styles.byeLabel}>BYE</Text>
+                )}
 
-            {isCompleted && sets.length > 0 && (
-                <View style={styles.scoreRow}>
-                    {sets.map((s, i) => (
-                        <View key={i} style={styles.setBadge}>
-                            <Text style={styles.setBadgeText}>{s.p1}-{s.p2}</Text>
-                        </View>
-                    ))}
-                </View>
-            )}
+                {isCompleted && sets.length > 0 && (
+                    <View style={styles.scoreRow}>
+                        {sets.map((s, i) => (
+                            <View key={i} style={styles.setBadge}>
+                                <Text style={styles.setBadgeText}>{s.p1}-{s.p2}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
 
-            {canLoad && (
-                <View style={styles.loadHint}>
-                    <Ionicons name="create-outline" size={12} color={Colors.primary} />
-                    <Text style={styles.loadHintText}>Cargar resultado</Text>
-                </View>
+                {canLoad && (
+                    <View style={styles.loadHint}>
+                        <Ionicons name="create-outline" size={12} color={Colors.primary} />
+                        <Text style={styles.loadHintText}>Cargar resultado</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+
+            {canSchedule && (
+                <TouchableOpacity
+                    style={styles.scheduleRow}
+                    onPress={onSchedule}
+                    activeOpacity={0.85}
+                >
+                    <Ionicons
+                        name="calendar-outline"
+                        size={13}
+                        color={match.scheduled_at ? Colors.primary : Colors.onSurfaceVariant}
+                    />
+                    <Text
+                        style={[styles.scheduleText, !match.scheduled_at && styles.scheduleTextMuted]}
+                        numberOfLines={1}
+                    >
+                        {scheduleLabel}
+                    </Text>
+                    <Ionicons
+                        name={match.scheduled_at ? 'create-outline' : 'add'}
+                        size={15}
+                        color={Colors.primary}
+                    />
+                </TouchableOpacity>
             )}
-        </TouchableOpacity>
+        </View>
     );
 }
 
@@ -102,6 +144,17 @@ export default function FixtureScreen() {
     const [generating, setGenerating] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [activeMatch, setActiveMatch] = useState<FixtureMatch | null>(null);
+    const [schedulingMatch, setSchedulingMatch] = useState<FixtureMatch | null>(null);
+    const [courts, setCourts] = useState<Court[]>([]);
+
+    const loadCourts = useCallback(async () => {
+        if (!profile) return;
+        try {
+            setCourts(await getCourts(profile.id));
+        } catch {
+            // silencioso: sin canchas igual se puede programar la fecha/hora
+        }
+    }, [profile]);
 
     const loadTournaments = useCallback(async () => {
         if (!profile) return;
@@ -135,7 +188,8 @@ export default function FixtureScreen() {
     useFocusEffect(
         useCallback(() => {
             loadTournaments();
-        }, [loadTournaments]),
+            loadCourts();
+        }, [loadTournaments, loadCourts]),
     );
 
     useEffect(() => {
@@ -170,6 +224,17 @@ export default function FixtureScreen() {
 
     const totalRounds = rounds.length;
     const hasFixture = totalRounds > 0;
+
+    // Reservas ya cargadas (para avisar de doble uso de cancha/horario).
+    const bookings: ScheduleBooking[] = rounds
+        .flat()
+        .filter((m) => !m.is_bye)
+        .map((m) => ({
+            id: m.id,
+            court_id: m.court_id,
+            scheduled_at: m.scheduled_at,
+            label: `${m.player1?.full_name ?? 'A definir'} vs ${m.player2?.full_name ?? 'A definir'}`,
+        }));
 
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
@@ -251,6 +316,7 @@ export default function FixtureScreen() {
                                             match={m}
                                             totalRounds={totalRounds}
                                             onPress={() => setActiveMatch(m)}
+                                            onSchedule={() => setSchedulingMatch(m)}
                                         />
                                     ))}
                                 </View>
@@ -269,6 +335,24 @@ export default function FixtureScreen() {
                     onClose={() => setActiveMatch(null)}
                     onSubmitted={() => {
                         setActiveMatch(null);
+                        if (selectedTournament) loadFixture(selectedTournament.id);
+                    }}
+                />
+            )}
+
+            {schedulingMatch && (
+                <MatchScheduleModal
+                    visible
+                    matchId={schedulingMatch.id}
+                    player1Name={schedulingMatch.player1?.full_name ?? 'A definir'}
+                    player2Name={schedulingMatch.player2?.full_name ?? 'A definir'}
+                    courts={courts}
+                    bookings={bookings}
+                    initialScheduledAt={schedulingMatch.scheduled_at}
+                    initialCourtId={schedulingMatch.court_id}
+                    onClose={() => setSchedulingMatch(null)}
+                    onSaved={() => {
+                        setSchedulingMatch(null);
                         if (selectedTournament) loadFixture(selectedTournament.id);
                     }}
                 />
@@ -316,12 +400,23 @@ const styles = StyleSheet.create({
     matchCard: {
         backgroundColor: Colors.surfaceContainerLowest,
         borderRadius: Radius.lg,
-        padding: Spacing.base,
-        gap: Spacing.sm,
         borderWidth: 1,
         borderColor: Colors.surfaceContainerHigh,
+        overflow: 'hidden',
     },
+    matchBody: { padding: Spacing.base, gap: Spacing.sm },
     matchCardBye: { opacity: 0.6 },
+    scheduleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: Spacing.base,
+        paddingVertical: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.surfaceContainerHigh,
+    },
+    scheduleText: { ...Typography.labelSm, color: Colors.onSurface, flex: 1 },
+    scheduleTextMuted: { color: Colors.onSurfaceVariant },
     matchDivider: { height: 1, backgroundColor: Colors.surfaceContainerHigh },
     playerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
     playerName: { ...Typography.bodySm, color: Colors.onSurface, flex: 1 },

@@ -30,7 +30,7 @@ export default function ProfileDetailScreen() {
         if (!id) return;
         supabase
             .from('profiles')
-            .select('*')
+            .select('id, username, full_name, avatar_url, role, city, club, elo, globalrank, level, wins, losses, play_style, bio, is_online, last_seen, created_at')
             .eq('id', id)
             .single()
             .then(({ data }) => {

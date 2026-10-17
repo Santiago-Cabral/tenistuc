@@ -1,5 +1,5 @@
 // app/organizerTabs/profile.tsx
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, StyleSheet, Alert, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,27 +9,12 @@ import { useAuthStore } from '../../src/stores/authStore';
 import { Colors, Spacing, Radius, Shadow } from '../../src/theme';
 import { Text, Button, Avatar } from '../../src/components/ui';
 import { getDashboardStats } from '../../src/services/organizerService';
-import {
-    getMyMpStatus, startMpOAuthFlow, openMpOAuthUrl,
-    watchMpOAuthReturn, disconnectMp, MpStatus,
-} from '../../src/services/paymentsService';
 
 export default function OrganizerProfileScreen() {
     const router = useRouter();
     const { session, profile, signOut, deleteAccount } = useAuthStore();
     const [stats, setStats] = useState<{ totalTournaments: number; totalPlayers: number } | null>(null);
     const [loading, setLoading] = useState(true);
-    const [mpStatus, setMpStatus] = useState<MpStatus | null>(null);
-    const [mpLoading, setMpLoading] = useState(false);
-
-    const loadMpStatus = useCallback(async () => {
-        try {
-            const s = await getMyMpStatus();
-            setMpStatus(s);
-        } catch {
-            setMpStatus({ connected: false, mp_user_id: null, connected_at: null });
-        }
-    }, []);
 
     useFocusEffect(
         useCallback(() => {
@@ -37,50 +22,8 @@ export default function OrganizerProfileScreen() {
             getDashboardStats(profile.id)
                 .then((s) => setStats({ totalTournaments: s.totalTournaments, totalPlayers: s.totalPlayers }))
                 .finally(() => setLoading(false));
-            loadMpStatus();
-        }, [profile, loadMpStatus]),
+        }, [profile]),
     );
-
-    // al volver del navegador de MercadoPago (tenistuc://mp-oauth) refrescamos el estado
-    useEffect(() => {
-        const returnSub = watchMpOAuthReturn().subscribe(loadMpStatus);
-        return returnSub;
-    }, [loadMpStatus]);
-
-    const handleConnectMp = async () => {
-        setMpLoading(true);
-        try {
-            const { url } = await startMpOAuthFlow();
-            await openMpOAuthUrl(url);
-            await loadMpStatus();
-        } catch (e: any) {
-            showAlert('No se pudo conectar', e?.message ?? 'Intentá de nuevo');
-        } finally {
-            setMpLoading(false);
-        }
-    };
-
-    const handleDisconnectMp = () => {
-        showAlert(
-            'Desvincular MercadoPago',
-            'Los próximos pagos de tus torneos no se podrán cobrar con MercadoPago. ¿Continuar?',
-            [
-                { text: 'Cancelar', style: 'cancel' },
-                {
-                    text: 'Desvincular',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await disconnectMp();
-                            setMpStatus({ connected: false, mp_user_id: null, connected_at: null });
-                        } catch (e: any) {
-                            showAlert('No se pudo desvincular', e?.message ?? 'Intentá de nuevo');
-                        }
-                    },
-                },
-            ],
-        );
-    };
 
     const handleLogout = () => {
         showAlert(
@@ -169,31 +112,6 @@ export default function OrganizerProfileScreen() {
                 )}
 
                 <View style={styles.card}>
-                    <View style={styles.infoLabelRow}>
-                        <Ionicons name="wallet-outline" size={14} color={Colors.primary} />
-                        <Text variant="label">Cobros con MercadoPago</Text>
-                    </View>
-                    <Text style={styles.mpDescription}>
-                        {mpStatus?.connected
-                            ? `Cuenta vinculada · ID ${mpStatus.mp_user_id ?? '—'}`
-                            : 'Vinculá tu cuenta de MercadoPago para cobrar las inscripciones de tus torneos. Por cada pago, tenistuc retiene su comisión.'}
-                    </Text>
-                    <Button
-                        label={mpStatus?.connected ? 'Reconectar cuenta' : 'Vincular MercadoPago'}
-                        variant={mpStatus?.connected ? 'secondary' : 'primary'}
-                        onPress={handleConnectMp}
-                        loading={mpLoading}
-                    />
-                    {mpStatus?.connected && (
-                        <Button
-                            label="Desvincular cuenta"
-                            variant="ghost"
-                            onPress={handleDisconnectMp}
-                        />
-                    )}
-                </View>
-
-                <View style={styles.card}>
                     <View style={styles.infoBlock}>
                         <View style={styles.infoLabelRow}>
                             <Ionicons name="mail-outline" size={14} color={Colors.onSurfaceVariant} />
@@ -279,10 +197,8 @@ const styles = StyleSheet.create({
         gap: Spacing.base,
         ...Shadow.ambient,
     },
-    mpDescription: { color: Colors.onSurfaceVariant, lineHeight: 18 },
     infoBlock: { gap: 4 },
     infoLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-
     signOutBtn: { marginTop: Spacing.sm },
     deleteBtn: {
         flexDirection: 'row',

@@ -12,6 +12,7 @@ import { Avatar } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { isActuallyOnline } from '../../services/presenceService';
+import { markMessageNotificationsRead } from '../../services/notificationService';
 
 interface Message {
     id: string;
@@ -51,6 +52,7 @@ export default function ChatScreen() {
                 { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` },
                 (payload) => {
                     setMessages((prev) => [...prev, payload.new as Message]);
+                    markMessageNotificationsRead(id);
                     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
                 },
             )
@@ -105,6 +107,7 @@ export default function ChatScreen() {
             .order('created_at', { ascending: true });
 
         if (data) setMessages(data);
+        markMessageNotificationsRead(id);
         setLoading(false);
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
     };

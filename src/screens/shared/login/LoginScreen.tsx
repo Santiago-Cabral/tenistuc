@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, Alert,
     KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity,
+    ActivityIndicator,
 } from 'react-native';
 import { showAlert } from '../../../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +13,8 @@ import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../../theme/index';
 import { Button, InputField, PrivacyConsent } from '../../../components/ui/index';
 import { useAuthStore } from '../../../stores/authStore';
+import { signInWithGoogle, signInWithApple } from '../../../services/authService';
+import type { OAuthProvider } from '../../../services/authService';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -21,7 +24,9 @@ export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [consent, setConsent] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [socialLoading, setSocialLoading] = useState<OAuthProvider | null>(null);
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -43,24 +48,24 @@ export default function LoginScreen() {
         }
     };
 
-    // TODO: conectá acá el flujo OAuth (ya está instalado expo-auth-session):
-    //   const { url } = await supabase.auth.signInWithOAuth({ provider: 'google', redirectTo: ... })
-    //   abrí url con WebBrowser y completá la sesión (exchangeCodeForSession).
-    const handleGoogleSignIn = async () => {
+    const handleOAuthSignIn = async (provider: OAuthProvider) => {
         if (!consent) {
             showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad para usar TenisTuc.');
             return;
         }
-        // Vendrá con Google login
-    };
-
-    // TODO: mismo flujo que Google con provider: 'apple'.
-    const handleAppleSignIn = async () => {
-        if (!consent) {
-            showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad para usar TenisTuc.');
-            return;
+        setSocialLoading(provider);
+        try {
+            const signInProvider = provider === 'google' ? signInWithGoogle : signInWithApple;
+            const ok = await signInProvider();
+            // Si `ok` es false el usuario canceló: no mostramos error.
+            // Si se creó la sesión, onAuthStateChange + AuthGuard redirigen.
+            if (!ok) return;
+        } catch (e: any) {
+            const label = provider === 'google' ? 'Google' : 'Apple';
+            showAlert(`Error con ${label}`, e.message ?? 'No se pudo iniciar sesión');
+        } finally {
+            setSocialLoading(null);
         }
-        // Vendrá con Apple login
     };
 
     return (
@@ -116,13 +121,26 @@ export default function LoginScreen() {
                             label="Contraseña"
                             value={password}
                             onChangeText={setPassword}
-                            secureTextEntry
+                            secureTextEntry={!showPassword}
                             autoCapitalize="none"
                             textContentType="password"
                             placeholder="••••••••"
                             editable={!loading}
                             returnKeyType="done"
                             onSubmitEditing={handleLogin}
+                            rightAccessory={(
+                                <TouchableOpacity
+                                    onPress={() => setShowPassword((v) => !v)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    disabled={loading}
+                                >
+                                    <Ionicons
+                                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                                        size={22}
+                                        color={Colors.onSurfaceVariant}
+                                    />
+                                </TouchableOpacity>
+                            )}
                         />
 
                         <TouchableOpacity
@@ -157,23 +175,35 @@ export default function LoginScreen() {
                     {/* Social login */}
                     <View style={styles.socialRow}>
                         <TouchableOpacity
-                            style={[styles.socialBtn, loading && styles.socialBtnDisabled]}
-                            onPress={handleGoogleSignIn}
-                            disabled={loading}
+                            style={[styles.socialBtn, (loading || socialLoading !== null) && styles.socialBtnDisabled]}
+                            onPress={() => handleOAuthSignIn('google')}
+                            disabled={loading || socialLoading !== null}
                             activeOpacity={0.85}
                         >
-                            <Ionicons name="logo-google" size={20} color={Colors.onSurface} />
-                            <Text style={styles.socialBtnText}>Google</Text>
+                            {socialLoading === 'google' ? (
+                                <ActivityIndicator size="small" color={Colors.primary} />
+                            ) : (
+                                <>
+                                    <Ionicons name="logo-google" size={20} color={Colors.onSurface} />
+                                    <Text style={styles.socialBtnText}>Google</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.socialBtn, loading && styles.socialBtnDisabled]}
-                            onPress={handleAppleSignIn}
-                            disabled={loading}
+                            style={[styles.socialBtn, (loading || socialLoading !== null) && styles.socialBtnDisabled]}
+                            onPress={() => handleOAuthSignIn('apple')}
+                            disabled={loading || socialLoading !== null}
                             activeOpacity={0.85}
                         >
-                            <Ionicons name="logo-apple" size={22} color={Colors.onSurface} />
-                            <Text style={styles.socialBtnText}>Apple</Text>
+                            {socialLoading === 'apple' ? (
+                                <ActivityIndicator size="small" color={Colors.primary} />
+                            ) : (
+                                <>
+                                    <Ionicons name="logo-apple" size={22} color={Colors.onSurface} />
+                                    <Text style={styles.socialBtnText}>Apple</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
                     </View>
 

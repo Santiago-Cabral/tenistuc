@@ -25,14 +25,14 @@ const SECTIONS: { title: string; body: string[] }[] = [
             '• Crear y mantener tu cuenta y tu perfil público dentro de la app.',
             '• Calcular el ranking, registrar resultados y mantener la clasificación de torneos.',
             '• Enviarte notificaciones push sobre desafíos, torneos, mensajes y resultados.',
-            '• Permitirte inscribirte y pagar la inscripción a torneos (a través de MercadoPago).',
+            '• Permitirte inscribirte en torneos y que el organizador habilite tu lugar.',
             '• Mejorar la aplicación, detectar errores y dar soporte.',
         ],
     },
     {
-        title: '4. Pagos con MercadoPago',
+        title: '4. Inscripciones a torneos',
         body: [
-            'Los pagos de inscripción a torneos se procesan a través de la plataforma MercadoPago. No almacenamos datos de tarjetas ni claves de pago: la transacción se realiza íntegramente en MercadoPago. Al pagar, se aplican los términos y la política de privacidad de MercadoPago.',
+            'La app no procesa pagos ni almacena datos de tarjetas. Cuando te inscribís a un torneo, el organizador habilita tu lugar manualmente y coordina con vos el pago de la inscripción por fuera de la aplicación (efectivo, transferencia u otro medio). TenisTuc sólo registra el estado de tu inscripción (pendiente o habilitada).',
         ],
     },
     {
@@ -46,7 +46,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
         body: [
             'No vendemos ni alquilamos tus datos. Sólo los compartimos con:',
             '• Otros usuarios de TenisTuc (perfil, resultados, ranking y mensajes).',
-            '• Proveedores de servicio necesarios para el funcionamiento (Supabase, MercadoPago, Expo/notificaciones push, Google y Apple si usás esa vía de ingreso).',
+            '• Proveedores de servicio necesarios para el funcionamiento (Supabase, Expo/notificaciones push, Google y Apple si usás esa vía de ingreso).',
         ],
     },
     {
@@ -92,7 +92,7 @@ export default function PrivacyPolicyScreen() {
                 showsVerticalScrollIndicator={false}
             >
                 <Text style={styles.title}>Política de Privacidad</Text>
-                <Text style={styles.updated}>Última actualización: 16 de septiembre de 2026</Text>
+                <Text style={styles.updated}>Última actualización: 16 de octubre de 2026</Text>
 
                 <View style={styles.introCard}>
                     <Text style={styles.introText}>
