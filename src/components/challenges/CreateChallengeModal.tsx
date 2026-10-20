@@ -14,6 +14,7 @@ import {
 import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import { useChallenges } from '../../hooks/useChallenges';
 import { MATCH_TYPE_LABELS, type MatchType } from '../../services/matchService';
@@ -57,6 +58,7 @@ export default function CreateChallengeModal({
     onCreated,
 }: Props) {
     const { createChallenge } = useChallenges();
+    const insets = useSafeAreaInsets();
     const [matchType, setMatchType] = useState<MatchType>('friendly');
     const [date, setDate] = useState<Date | null>(null);
     const [venue, setVenue] = useState('');
@@ -145,7 +147,7 @@ export default function CreateChallengeModal({
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
             <View style={styles.overlay}>
-                <View style={styles.container}>
+                <View style={[styles.container, { paddingBottom: Spacing.xl + insets.bottom }]}>
                     <View style={styles.header}>
                         <Avatar uri={rivalAvatar} size={44} />
                         <View style={{ flex: 1 }}>

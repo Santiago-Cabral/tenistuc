@@ -15,7 +15,21 @@ import { Avatar, Badge, Button, Card, SectionHeader } from '../../components/ui'
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { matchesService } from '../../services/matchService';
+import { isActuallyOnline } from '../../services/presenceService';
 import CreateChallengeModal from '../../components/challenges/CreateChallengeModal';
+
+function timeAgo(iso?: string | null): string {
+    if (!iso) return 'desconocida';
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'recién';
+    if (m < 60) return `hace ${m} min`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `hace ${h} h`;
+    const d = Math.floor(h / 24);
+    if (d < 30) return `hace ${d} d`;
+    return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
 export default function ProfileDetailScreen() {
     const router = useRouter();
@@ -23,28 +37,40 @@ export default function ProfileDetailScreen() {
     const { profile: myProfile } = useAuthStore();
     const [player, setPlayer] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
     const [globalRank, setGlobalRank] = useState<number | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
 
     useEffect(() => {
-        if (!id) return;
+        if (!id) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        setLoadError(null);
         supabase
             .from('profiles')
-            .select('id, username, full_name, avatar_url, role, city, club, elo, globalrank, level, wins, losses, play_style, bio, is_online, last_seen, created_at')
+            .select('id, username, full_name, avatar_url, role, city, club, elo, level, wins, losses, play_style, bio, is_online, last_seen, created_at')
             .eq('id', id)
             .single()
-            .then(({ data }) => {
-                if (data) setPlayer(data);
-                setLoading(false);
-                if (data?.elo) {
-                    supabase
-                        .from('profiles')
-                        .select('id', { count: 'exact', head: true })
-                        .gt('elo', data.elo)
-                        .then(({ count }) => setGlobalRank(count !== null ? count + 1 : null));
+            .then(({ data, error }) => {
+                if (error) {
+                    console.warn('[ProfileDetailScreen] load error:', error.message);
+                    setLoadError(error.message);
+                } else if (data) {
+                    setPlayer(data);
+                    if (data.elo) {
+                        supabase
+                            .from('profiles')
+                            .select('id', { count: 'exact', head: true })
+                            .gt('elo', data.elo)
+                            .then(({ count }) => setGlobalRank(count !== null ? count + 1 : null));
+                    }
                 }
+                setLoading(false);
             });
-    }, [id]);
+    }, [id, reloadKey]);
 
     const isMe = myProfile?.id === id;
 
@@ -106,10 +132,20 @@ export default function ProfileDetailScreen() {
     );
 
     if (!player) return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ ...Typography.bodyMd, color: Colors.onSurfaceVariant }}>
-                Jugador no encontrado
+        <SafeAreaView style={{ flex: 1, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, padding: Spacing.xl }}>
+            <Ionicons
+                name={loadError ? 'alert-circle-outline' : 'person-outline'}
+                size={40}
+                color={Colors.onSurfaceVariant}
+            />
+            <Text style={{ ...Typography.bodyMd, color: Colors.onSurfaceVariant, textAlign: 'center' }}>
+                {loadError
+                    ? 'No se pudo cargar el perfil del jugador.'
+                    : 'Jugador no encontrado'}
             </Text>
+            <TouchableOpacity onPress={() => setReloadKey(k => k + 1)}>
+                <Text style={{ ...Typography.labelLg, color: Colors.primary }}>Reintentar</Text>
+            </TouchableOpacity>
         </SafeAreaView>
     );
 
@@ -148,6 +184,16 @@ export default function ProfileDetailScreen() {
 
                     <Text style={styles.name}>{player.full_name}</Text>
                     <Text style={styles.username}>@{player.username}</Text>
+                    <View style={styles.statusRow}>
+                        {isActuallyOnline(player) ? (
+                            <>
+                                <View style={styles.onlineDot} />
+                                <Text style={styles.statusText}>En línea</Text>
+                            </>
+                        ) : (
+                            <Text style={styles.statusText}>Última conexión {timeAgo(player.last_seen)}</Text>
+                        )}
+                    </View>
                     <View style={styles.levelWrap}>
                         <Badge
                             label={player.level ?? 'Amateur I'}
@@ -182,6 +228,19 @@ export default function ProfileDetailScreen() {
                         ))}
                     </View>
 
+                    {Array.isArray(player.play_style) && player.play_style.length > 0 && (
+                        <Card>
+                            <SectionHeader title="Estilo de juego" />
+                            <View style={styles.chipsRow}>
+                                {player.play_style.map((s: string) => (
+                                    <View key={s} style={styles.chip}>
+                                        <Text style={styles.chipText}>{s}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </Card>
+                    )}
+
                     {player.bio && (
                         <Card>
                             <SectionHeader title="Bio" />
@@ -193,6 +252,12 @@ export default function ProfileDetailScreen() {
                         {[
                             { icon: 'location-outline', label: player.city ?? 'Sin ciudad' },
                             { icon: 'tennisball-outline', label: player.club ?? 'Sin club' },
+                            {
+                                icon: 'calendar-outline',
+                                label: player.created_at
+                                    ? `Miembro desde ${new Date(player.created_at).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}`
+                                    : 'Miembro desde hace tiempo',
+                            },
                         ].map((item, i) => (
                             <View key={i} style={styles.infoRow}>
                                 <Ionicons name={item.icon as any} size={18} color={Colors.primary} />
@@ -282,6 +347,12 @@ const styles = StyleSheet.create({
         fontSize: 24, color: Colors.primaryContainer, letterSpacing: -0.5,
     },
     username: { ...Typography.bodyMd, color: 'rgba(183,228,199,0.75)' },
+    statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+    onlineDot: {
+        width: 8, height: 8, borderRadius: 4,
+        backgroundColor: '#4ade80',
+    },
+    statusText: { ...Typography.labelSm, color: 'rgba(183,228,199,0.75)' },
     levelWrap: { marginTop: Spacing.sm },
     content: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl, gap: Spacing.lg },
     eloCard: {},
@@ -306,6 +377,14 @@ const styles = StyleSheet.create({
     },
     statLabel: { ...Typography.labelSm, color: Colors.onSurfaceVariant },
     bioText: { ...Typography.bodyMd, color: Colors.onSurface, lineHeight: 22, marginTop: Spacing.sm },
+    chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.sm },
+    chip: {
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.base,
+        borderRadius: Radius.full,
+        backgroundColor: Colors.surfaceContainerHigh,
+    },
+    chipText: { ...Typography.bodySm, color: Colors.onSurface },
     infoCard: { gap: Spacing.md },
     infoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
     infoText: { ...Typography.bodyMd, color: Colors.onSurface },

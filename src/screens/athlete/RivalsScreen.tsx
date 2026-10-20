@@ -31,6 +31,22 @@ interface Rival {
 
 type FilterKey = 'all' | 'level' | 'city' | 'online';
 
+// Normaliza para comparar ciudades sin depender de mayúsculas/acentos:
+// "Tucumán" ↔ "tucuman" ↔ "San Miguel de Tucumán" (via includes).
+const normalize = (s: string) =>
+    s
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+
+const sameCity = (a?: string | null, b?: string | null): boolean => {
+    const na = normalize(a ?? '');
+    const nb = normalize(b ?? '');
+    if (!na || !nb) return false;
+    return na === nb || na.includes(nb) || nb.includes(na);
+};
+
 export default function RivalsScreen() {
     const router = useRouter();
     const { profile } = useAuthStore();
@@ -85,7 +101,7 @@ export default function RivalsScreen() {
         if (filter === 'level' && profile?.level) {
             list = list.filter(r => r.level === profile.level);
         } else if (filter === 'city' && profile?.city) {
-            list = list.filter(r => r.city === profile.city);
+            list = list.filter(r => sameCity(r.city, profile.city));
         } else if (filter === 'online') {
             list = list.filter(r => isActuallyOnline(r));
         }
@@ -297,15 +313,30 @@ export default function RivalsScreen() {
                     ListEmptyComponent={
                         <View style={styles.empty}>
                             <Ionicons name="people-outline" size={48} color={Colors.onSurfaceVariant} />
-                            <Text style={styles.emptyText}>
-                                {filter === 'all'
-                                    ? 'No se encontraron jugadores'
-                                    : 'Nadie coincide con este filtro todavía'}
-                            </Text>
-                            {filter !== 'all' && (
-                                <TouchableOpacity onPress={() => setFilter('all')}>
-                                    <Text style={styles.emptyAction}>Ver todos los jugadores</Text>
-                                </TouchableOpacity>
+                            {filter === 'city' && !profile?.city ? (
+                                <>
+                                    <Text style={styles.emptyText}>
+                                        No tenés ciudad cargada en tu perfil. Agregala para que podamos mostrarte rivales cerca de vos.
+                                    </Text>
+                                    <TouchableOpacity onPress={() => router.push('/edit-profile' as any)}>
+                                        <Text style={styles.emptyAction}>Completar mi perfil</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={styles.emptyText}>
+                                        {filter === 'all'
+                                            ? 'No se encontraron jugadores'
+                                            : filter === 'city'
+                                                ? `No encontramos rivales en ${profile?.city} todavía`
+                                                : 'Nadie coincide con este filtro todavía'}
+                                    </Text>
+                                    {filter !== 'all' && (
+                                        <TouchableOpacity onPress={() => setFilter('all')}>
+                                            <Text style={styles.emptyAction}>Ver todos los jugadores</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </>
                             )}
                         </View>
                     }

@@ -58,5 +58,8 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+# proyecto de ejemplo clonado (no forma parte de la app)
+expo-dynamic-notifications/
+
 # contexto del proyecto: NUNCA ignorar (contiene el historial para el agente)
 !CONTEXTO_PROYECTO.txt

@@ -11,8 +11,7 @@ import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius } from '../../../theme/index';
 import { Button, InputField, PrivacyConsent } from '../../../components/ui/index';
 import { useAuthStore } from '../../../stores/authStore';
-
-const LEVELS = ['Amateur I', 'Amateur II', 'Intermedio', 'Avanzado', 'Competitivo'];
+import { LEVELS, type Level } from '../../../constants/levels';
 
 export default function RegisterScreen() {
     const router = useRouter();
@@ -22,7 +21,7 @@ export default function RegisterScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [level, setLevel] = useState('Amateur I');
+    const [level, setLevel] = useState<Level>('Amateur I');
     const [consent, setConsent] = useState(false);
     const [loading, setLoading] = useState(false);
 

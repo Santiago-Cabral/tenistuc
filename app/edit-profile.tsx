@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../src/theme/index';
 import { InputField, Button, Chip } from '../src/components/ui';
 import { useAuthStore } from '../src/stores/authStore';
+import { LEVELS, type Level } from '../src/constants/levels';
 import { supabase } from '../src/lib/supabase';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ export default function EditProfileScreen() {
     const [city, setCity] = useState(profile?.city ?? '');
     const [club, setClub] = useState(profile?.club ?? '');
     const [bio, setBio] = useState(profile?.bio ?? '');
+    const [level, setLevel] = useState<Level>(profile?.level ?? 'Amateur I');
     const [selectedStyles, setSelectedStyles] = useState<string[]>(profile?.play_style ?? []);
     const [avatarUri, setAvatarUri] = useState<string | null>(profile?.avatar_url ?? null);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -122,6 +124,7 @@ export default function EditProfileScreen() {
                 city: city.trim() || null,
                 club: club.trim() || null,
                 bio: bio.trim() || null,
+                level,
                 play_style: selectedStyles,
             });
             router.back();
@@ -254,6 +257,23 @@ export default function EditProfileScreen() {
                             style={{ minHeight: 80 } as any}
                         />
                     </View>
+
+                    {/* ── Categoría / Nivel (solo athletes) ── */}
+                    {profile?.role === 'athlete' && (
+                        <View style={styles.section}>
+                            <Text style={styles.sectionLabel}>CATEGORÍA / NIVEL</Text>
+                            <View style={styles.stylesGrid}>
+                                {LEVELS.map(l => (
+                                    <Chip
+                                        key={l}
+                                        label={l}
+                                        active={level === l}
+                                        onPress={() => setLevel(l)}
+                                    />
+                                ))}
+                            </View>
+                        </View>
+                    )}
 
                     {/* ── Estilo de juego (solo athletes) ── */}
                     {profile?.role === 'athlete' && (

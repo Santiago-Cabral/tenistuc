@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { presenceService } from '../services/presenceService';
+import type { Level } from '../constants/levels';
 
 // Columnas legibles de `profiles`. Se listan explícitamente y se excluye
 // `expo_push_token`: esa columna está revocada para anon/authenticated
@@ -19,18 +20,7 @@ export interface Profile {
     club: string | null;
     elo: number;
     globalRank: number;
-    level:
-    | 'Amateur I'
-    | 'Amateur II'
-    | 'Intermedio'
-    | 'Avanzado'
-    | 'Competitivo'
-    | 'Semi-Pro I'
-    | 'Semi-Pro II'
-    | 'Pro I'
-    | 'Pro II'
-    | 'Elite'
-    | 'Legendary';
+    level: Level;
     wins: number;
     losses: number;
     play_style: string[] | null;
@@ -54,7 +44,7 @@ interface AuthState {
         password: string,
         username: string,
         fullName: string,
-        level?: string,
+        level?: Level,
         role?: 'athlete' | 'organizer'
     ) => Promise<void>;
     signOut: () => Promise<void>;
