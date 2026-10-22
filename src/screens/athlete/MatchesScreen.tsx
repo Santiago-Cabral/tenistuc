@@ -12,6 +12,7 @@ import { Avatar, Badge, Card, Button } from '../../components/ui';
 import { useAuthStore } from '../../stores/authStore';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { MATCH_TYPE_LABELS, matchesService } from '../../services/matchService';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 
 interface SetScore { p1: number; p2: number; }
 interface ResultModalState { visible: boolean; matchId: string; opponentId: string; opponentName: string; }
@@ -683,6 +684,11 @@ export default function MatchesScreen() {
     useEffect(() => {
         loadData();
     }, [profile?.id]);
+
+    // Estado en vivo: cuando el rival acepta, agenda, manda el resultado o
+    // confirma, la lista se actualiza sola (sin pull-to-refresh).
+    useLiveRefresh('matches', () => { loadData(); });
+    useLiveRefresh('challenges', () => { loadData(); });
 
     const onRefresh = async () => {
         setRefreshing(true);

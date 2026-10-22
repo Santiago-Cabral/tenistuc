@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity,
-    StyleSheet, ActivityIndicator, Alert,
+    StyleSheet, ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
 import { showAlert } from '../../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { Colors, Typography, Spacing, Radius } from '../../theme';
 import { Avatar, Badge, Card } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { useLiveRefresh, LivePayload } from '../../hooks/useLiveRefresh';
 import CreateChallengeModal from '../../components/challenges/CreateChallengeModal';
 
 interface RankedPlayer {
@@ -31,6 +32,7 @@ export default function RankingScreen() {
     const { profile } = useAuthStore();
     const [players, setPlayers] = useState<RankedPlayer[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
     const [selectedRival, setSelectedRival] = useState<RankedPlayer | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
@@ -53,6 +55,58 @@ export default function RankingScreen() {
     }, []);
 
     useEffect(() => { loadPlayers(); }, [loadPlayers]);
+
+    // ── Actualización en vivo ──────────────────────────────────────────────────
+    // Cuando el motor de ELO de la BD mueve el ELO de alguien (al confirmar
+    // un partido por puntos), el ranking se reordena al instante, sin pull.
+    const applyLiveProfile = useCallback((payload: LivePayload) => {
+        if (payload.eventType === 'DELETE') return;
+        const row = payload.new;
+        if (!row?.id) return;
+
+        setPlayers((prev) => {
+            const idx = prev.findIndex((p) => p.id === row.id);
+            const next =
+                idx >= 0
+                    ? prev.map((p, i) =>
+                        i === idx
+                            ? {
+                                ...p,
+                                elo: row.elo ?? p.elo,
+                                wins: row.wins ?? p.wins,
+                                losses: row.losses ?? p.losses,
+                                level: row.level ?? p.level,
+                                full_name: row.full_name ?? p.full_name,
+                                avatar_url: row.avatar_url ?? p.avatar_url,
+                            }
+                            : p,
+                    )
+                    : [
+                        ...prev,
+                        {
+                            id: row.id,
+                            full_name: row.full_name ?? row.username ?? 'Jugador',
+                            username: row.username ?? '',
+                            avatar_url: row.avatar_url ?? null,
+                            city: row.city ?? null,
+                            elo: row.elo ?? 1000,
+                            level: row.level ?? 'Amateur I',
+                            wins: row.wins ?? 0,
+                            losses: row.losses ?? 0,
+                        },
+                    ];
+
+            return [...next].sort((a, b) => (b.elo ?? 0) - (a.elo ?? 0));
+        });
+    }, []);
+
+    useLiveRefresh('profiles', applyLiveProfile);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await loadPlayers();
+        setRefreshing(false);
+    }, [loadPlayers]);
 
     const openChallengeModal = (player: RankedPlayer) => {
         if (player.id === profile?.id) return;
@@ -165,6 +219,14 @@ export default function RankingScreen() {
                 keyExtractor={(item) => item.id}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.list}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={Colors.primary}
+                        colors={[Colors.primary]}
+                    />
+                }
                 renderItem={({ item: player, index }) => {
                     const position = index + 1;
                     const badge = rankBadgeColor(position);

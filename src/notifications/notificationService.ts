@@ -133,3 +133,143 @@ export async function clearPushToken(userId: string) {
     .update({ expo_push_token: null })
     .eq('id', userId)
 }
+
+// ─── Estado de las notificaciones (para mostrarlo en la UI) ────────────────────
+
+export type PushStatus =
+  | 'granted'          // permiso concedido y token registrado
+  | 'denied'           // el usuario lo bloqueó (o el sistema)
+  | 'undetermined'     // todavía no se preguntó
+  | 'unsupported'      // web / Expo Go en Android
+  | 'no-device'        // emulador (no hay push)
+  | 'error'            // falló el registro del token
+
+export interface PushState {
+  status: PushStatus
+  /** Texto corto para explicar el estado al usuario. */
+  message: string
+  /** ¿Se puede pedir el permiso desde la app? */
+  canRequest: boolean
+}
+
+/**
+ * Estado real de las notificaciones en este dispositivo/host.
+ * Antes esto no se podía consultar, y la app pedía permiso "a ciegas":
+ * si fallaba (Expo Go en Android, permiso ya denegado) no se veía nada.
+ */
+export async function getPushState(): Promise<PushState> {
+  if (Platform.OS === 'web') {
+    return {
+      status: 'unsupported',
+      message: 'Las notificaciones push no funcionan en la web.',
+      canRequest: false,
+    }
+  }
+
+  const inExpoGo =
+    Constants.executionEnvironment === 'storeClient' && Platform.OS === 'android'
+  if (inExpoGo) {
+    return {
+      status: 'unsupported',
+      message:
+        'Estás en Expo Go: las notificaciones push no funcionan en Android. Instalá la app de desarrollo para recibirlas.',
+      canRequest: false,
+    }
+  }
+
+  const Notifications = await loadNotifications()
+  if (!Notifications) {
+    return {
+      status: 'unsupported',
+      message: 'Este entorno no soporta notificaciones push.',
+      canRequest: false,
+    }
+  }
+
+  const Device = await loadDevice()
+  if (Device && !Device.isDevice) {
+    return {
+      status: 'no-device',
+      message: 'Las notificaciones push sólo funcionan en un teléfono físico.',
+      canRequest: false,
+    }
+  }
+
+  const { status } = await Notifications.getPermissionsAsync()
+
+  if (status === 'granted') {
+    return { status: 'granted', message: 'Notificaciones activadas.', canRequest: false }
+  }
+  if (status === 'denied') {
+    return {
+      status: 'denied',
+      message:
+        'Las notificaciones están bloqueadas. Activalas desde los ajustes del sistema (Ajustes → Aplicaciones → TenisTuc → Notificaciones).',
+      canRequest: false,
+    }
+  }
+
+  return {
+    status: 'undetermined',
+    message: 'Las notificaciones están desactivadas. Tocá para activarlas.',
+    canRequest: true,
+  }
+}
+
+/**
+ * Pide el permiso (si hace falta), registra el token de push en el backend y
+ * devuelve el resultado. Es el botón que la app expone en la UI.
+ */
+export async function enablePushNotifications(
+  userId: string,
+): Promise<{ ok: boolean; state: PushState }> {
+  const before = await getPushState()
+  if (before.status === 'unsupported' || before.status === 'no-device') {
+    return { ok: false, state: before }
+  }
+
+  const Notifications = await loadNotifications()
+  if (!Notifications) {
+    return {
+      ok: false,
+      state: { status: 'unsupported', message: 'Sin soporte de notificaciones.', canRequest: false },
+    }
+  }
+
+  const granted = await ensureNotificationPermission(Notifications)
+  if (!granted) {
+    const after = await getPushState()
+    return {
+      ok: false,
+      state:
+        after.status === 'denied'
+          ? after
+          : {
+              status: 'denied',
+              message:
+                'No se pudo activar el permiso de notificaciones. Activalo desde los ajustes del sistema.',
+              canRequest: false,
+            },
+    }
+  }
+
+  const token = await registerForPushNotifications()
+  if (!token) {
+    return {
+      ok: false,
+      state: {
+        status: 'error',
+        message:
+          'Permiso concedido, pero no se pudo registrar el dispositivo para push. Revisá la configuración de Firebase en el build.',
+        canRequest: false,
+      },
+    }
+  }
+
+  await savePushToken(userId, token)
+
+  return {
+    ok: true,
+    state: { status: 'granted', message: 'Notificaciones activadas.', canRequest: false },
+  }
+}

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { presenceService } from '../services/presenceService';
+import { clearPushToken } from '../notifications/notificationService';
 import type { Level } from '../constants/levels';
 
 // Columnas legibles de `profiles`. Se listan explícitamente y se excluye
@@ -49,6 +50,8 @@ interface AuthState {
     ) => Promise<void>;
     signOut: () => Promise<void>;
     fetchProfile: () => Promise<void>;
+    /** Aplica un parche parcial al perfil en memoria (sin ir a la BD). */
+    patchProfile: (updates: Partial<Profile>) => void;
     updateProfile: (updates: Partial<Profile>) => Promise<void>;
     recordPrivacyConsent: () => Promise<void>;
     deleteAccount: () => Promise<void>;
@@ -121,6 +124,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const { profile } = get();
         if (profile?.id) {
             presenceService.markOffline(profile.id).catch(() => {});
+            // El token de push es por dispositivo: si este usuario cierra sesión
+            // en este teléfono, hay que sacarlo para que no le lleguen avisos
+            // a un dispositivo que ya no usa.
+            clearPushToken(profile.id).catch(() => {});
         }
         await supabase.auth.signOut();
         set({ session: null, profile: null, authError: null });
@@ -144,6 +151,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
 
         set({ profile: data as unknown as Profile, authError: null });
+    },
+
+    patchProfile: (updates) => {
+        set((state) => {
+            if (!state.profile) return state;
+            return { profile: { ...state.profile, ...updates } };
+        });
     },
 
     updateProfile: async (updates) => {

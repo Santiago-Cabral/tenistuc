@@ -63,22 +63,42 @@ async function loadNotificationsModule() {
 }
 
 function handleTap(data: Record<string, string>) {
+  const targetId =
+    data?.challenge_id ??
+    data?.tournament_id ??
+    data?.conversation_id ??
+    data?.match_id;
+
   switch (data?.type) {
     case 'challenge':
-      data.challenge_id
-        ? router.push(`/challenge/${data.challenge_id}` as any)
+    case 'challenge_received':
+    case 'challenge_accepted':
+    case 'challenge_rejected':
+      targetId
+        ? router.push(`/challenge/${targetId}` as any)
         : router.push('/matches' as any)
       break
     case 'tournament_new':
     case 'tournament_start':
-      data.tournament_id
-        ? router.push(`/tournament/${data.tournament_id}` as any)
+    case 'tournament_update':
+    case 'tournament_registration':
+    case 'fixture_ready':
+      targetId
+        ? router.push(`/tournament/${targetId}` as any)
         : router.push('/athleteTabs/tournament' as any)
       break
     case 'message':
-      data.conversation_id
-        ? router.push(`/chat/${data.conversation_id}` as any)
+      targetId
+        ? router.push(`/chat/${targetId}` as any)
         : router.push('/athleteTabs/messages' as any)
+      break
+    case 'match_result':
+    case 'match_confirmed':
+    case 'match_scheduled':
+      router.push('/matches' as any)
+      break
+    default:
+      router.push('/notifications' as any)
       break
   }
 }

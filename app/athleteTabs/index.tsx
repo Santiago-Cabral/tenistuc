@@ -14,6 +14,8 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '../../src/theme/ind
 import { Avatar, Badge, EloIndicator, Card, SectionHeader, Button } from '../../src/components/ui/index';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useChallenges } from '../../src/hooks/useChallenges';
+import { useLiveRefresh } from '../../src/hooks/useLiveRefresh';
+import { useUnreadNotificationsCount } from '../../src/hooks/useNotifications';
 import { MATCH_TYPE_LABELS } from '../../src/services/matchService';
 import { supabase } from '../../src/lib/supabase';
 import { isActuallyOnline } from '../../src/services/presenceService';
@@ -107,6 +109,7 @@ export default function HomeScreen() {
     const router = useRouter();
     const { profile } = useAuthStore();
     const { acceptChallenge, rejectChallenge } = useChallenges();
+    const unreadNotifications = useUnreadNotificationsCount();
     const [matches, setMatches] = useState<MatchWithPlayers[]>([]);
     const [challenges, setChallenges] = useState<ChallengeItem[]>([]);
     const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -199,6 +202,12 @@ export default function HomeScreen() {
     }, [profile]);
 
     useEffect(() => { loadData(); }, [loadData]);
+
+    // Panel de puntos en vivo: el ELO, los partidos y los desafíos se actualizan
+    // solos cuando el motor de ELO de la BD mueve algo o el rival actúa.
+    useLiveRefresh('matches', () => { loadData(); });
+    useLiveRefresh('challenges', () => { loadData(); });
+    useLiveRefresh('tournaments', () => { loadData(); });
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -396,9 +405,26 @@ export default function HomeScreen() {
                             {profile?.full_name?.split(' ')[0] ?? profile?.username ?? 'Atleta'}
                         </Text>
                     </View>
-                    <TouchableOpacity onPress={() => router.push('/athleteTabs/profile')} activeOpacity={0.85}>
-                        <Avatar uri={profile?.avatar_url} size={48} online={isActuallyOnline(profile)} />
-                    </TouchableOpacity>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            onPress={() => router.push('/notifications' as any)}
+                            activeOpacity={0.85}
+                            style={styles.bellBtn}
+                        >
+                            <Ionicons name="notifications-outline" size={22} color={Colors.onSurface} />
+                            {unreadNotifications > 0 && (
+                                <View style={styles.bellBadge}>
+                                    <Text style={styles.bellBadgeText}>
+                                        {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                                    </Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={() => router.push('/athleteTabs/profile')} activeOpacity={0.85}>
+                            <Avatar uri={profile?.avatar_url} size={48} online={isActuallyOnline(profile)} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <View style={styles.content}>
@@ -688,6 +714,20 @@ const styles = StyleSheet.create({
     },
     greeting: { ...Typography.bodyMd, color: Colors.onSurfaceVariant },
     name: { fontFamily: 'Lexend_700Bold', fontSize: 24, color: Colors.onSurface, letterSpacing: -0.3 },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+    bellBtn: {
+        width: 40, height: 40, borderRadius: 20,
+        alignItems: 'center', justifyContent: 'center',
+        backgroundColor: Colors.surfaceContainerHigh,
+    },
+    bellBadge: {
+        position: 'absolute', top: 2, right: 2,
+        minWidth: 16, height: 16, borderRadius: 8,
+        paddingHorizontal: 3,
+        backgroundColor: Colors.error,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    bellBadgeText: { ...Typography.labelSm, color: '#fff', fontSize: 9, lineHeight: 12 },
     content: { paddingHorizontal: Spacing.xl, gap: Spacing.xl },
     eloCard: { borderRadius: Radius.xxl, padding: Spacing.xl, gap: Spacing.sm, ...Shadow.float },
     eloHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

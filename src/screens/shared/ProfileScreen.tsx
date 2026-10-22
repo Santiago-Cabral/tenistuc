@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { Badge, Button, Card, SectionHeader } from '../../components/ui';
 import { useAuthStore } from '../../stores/authStore';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { supabase } from '../../lib/supabase';
 
 export default function ProfileScreen() {
@@ -19,6 +20,7 @@ export default function ProfileScreen() {
     const { profile, signOut, fetchProfile, deleteAccount } = useAuthStore();
     const [refreshing, setRefreshing] = useState(false);
     const [globalRank, setGlobalRank] = useState<number | null>(null);
+    const push = usePushNotifications();
 
     const loadRank = async () => {
         if (!profile) return;
@@ -215,6 +217,49 @@ export default function ProfileScreen() {
                         </Card>
                     )}
 
+                    {/* ── Notificaciones ── */}
+                    <Card style={styles.pushCard}>
+                        <View style={styles.pushHeaderRow}>
+                            <View style={styles.pushIconWrap}>
+                                <Ionicons
+                                    name={
+                                        push.state?.status === 'granted'
+                                            ? 'notifications'
+                                            : 'notifications-off-outline'
+                                    }
+                                    size={18}
+                                    color={push.state?.status === 'granted' ? Colors.primary : Colors.onSurfaceVariant}
+                                />
+                            </View>
+                            <View style={styles.pushTextCol}>
+                                <Text style={styles.sectionLabel}>NOTIFICACIONES</Text>
+                                <Text style={styles.pushStatus}>
+                                    {push.state?.message ?? 'Verificando...'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {push.state?.status !== 'granted' && (
+                            <Button
+                                label={push.loading ? 'Activando...' : 'Activar notificaciones'}
+                                variant="secondary"
+                                onPress={push.enable}
+                                disabled={push.loading || !push.state?.canRequest}
+                                style={styles.pushBtn}
+                            />
+                        )}
+
+                        <TouchableOpacity
+                            onPress={() => router.push('/notifications' as any)}
+                            activeOpacity={0.7}
+                            style={styles.pushInboxRow}
+                        >
+                            <Ionicons name="file-tray-outline" size={16} color={Colors.onSurfaceVariant} />
+                            <Text style={styles.pushInboxText}>Ver bandeja de notificaciones</Text>
+                            <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
+                        </TouchableOpacity>
+                    </Card>
+
                     {/* ── Cerrar sesión ── */}
                     <Button
                         label="Cerrar sesión"
@@ -396,6 +441,23 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         fontFamily: 'PlusJakartaSans_600SemiBold',
     },
+
+    pushCard: { gap: Spacing.md },
+    pushHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
+    pushIconWrap: {
+        width: 36, height: 36, borderRadius: 18,
+        backgroundColor: Colors.primaryContainer,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    pushTextCol: { flex: 1, gap: 2 },
+    pushStatus: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
+    pushBtn: { marginTop: Spacing.sm },
+    pushInboxRow: {
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+        paddingTop: Spacing.sm,
+        borderTopWidth: 1, borderTopColor: Colors.surfaceContainerLow,
+    },
+    pushInboxText: { ...Typography.bodyMd, color: Colors.onSurface, flex: 1 },
 
     signOutBtn: { marginTop: Spacing.sm },
     deleteBtn: {

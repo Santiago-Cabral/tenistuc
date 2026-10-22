@@ -11,6 +11,7 @@ import { Colors, Typography, Spacing, Radius } from '../src/theme/index';
 import { Avatar, Badge, Card, Button } from '../src/components/ui';
 import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/stores/authStore';
+import { useLiveRefresh } from '../src/hooks/useLiveRefresh';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
 interface SetScore { p1: number; p2: number; }
@@ -493,7 +494,7 @@ export default function MatchesScreen() {
         .limit(20),
       supabase.from('challenges').select(`
                 id, challenger_id, challenged_id, status, created_at,
-                proposed_date, proposed_venue, message, match_id,
+                proposed_date, proposed_venue, message, match_id, match_type,
                 challenger:profiles!challenges_challenger_id_fkey(full_name, avatar_url),
                 challenged:profiles!challenges_challenged_id_fkey(full_name, avatar_url)
             `)
@@ -507,6 +508,12 @@ export default function MatchesScreen() {
   };
 
   useEffect(() => { loadData(); }, [profile]);
+
+  // Estado en vivo: cuando el rival acepta, agenda, manda el resultado o
+  // confirma, la lista se actualiza sola (sin pull-to-refresh).
+  useLiveRefresh('matches', () => { loadData(); });
+  useLiveRefresh('challenges', () => { loadData(); });
+
   const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
 
   const formatDate = (iso: string) => {
@@ -561,7 +568,10 @@ export default function MatchesScreen() {
         .insert({
           player1_id: c.challenger_id,
           player2_id: c.challenged_id,
-          type: 'challenge',
+          // Se conserva la modalidad del desafío: si era 'competitive' ("por
+          // puntos") el partido tiene que quedar como 'competitive' para que
+          // el motor de ELO lo tenga en cuenta al confirmarse el resultado.
+          type: c.match_type ?? 'friendly',
           status: 'confirmed',
           scheduled_at: c.proposed_date ?? null,
           location: c.proposed_venue ?? null,

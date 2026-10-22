@@ -17,6 +17,7 @@ import { View, ActivityIndicator } from "react-native";
 import { Colors } from "../src/theme";
 import { useNotifications } from "../src/hooks/useNotifications";
 import { usePresence } from "../src/hooks/usePresence";
+import { useLiveProfile } from "../src/hooks/useLiveProfile";
 import { AppAlertHost } from "../src/services/appAlert";
 import { ensureNotificationPermission } from "../src/notifications/notificationService";
 
@@ -26,6 +27,7 @@ export default function RootLayout() {
     const segments = useSegments();
     useNotifications();
     usePresence();
+    useLiveProfile();
 
     const [fontsLoaded] = useFonts({
         Lexend_500Medium,

@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius } from '../../src/theme';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useChallenges, Challenge, ChallengeProfile } from '../../src/hooks/useChallenges';
+import { useLiveRefresh } from '../../src/hooks/useLiveRefresh';
 import { Avatar } from '../../src/components/ui/Avatar';
 import { Badge } from '../../src/components/ui/Badge';
 import { Button } from '../../src/components/ui/Button';
@@ -119,6 +120,10 @@ export default function ChallengeDetailScreen() {
     useEffect(() => {
         load();
     }, [load]);
+
+    // Si el rival acepta/rechaza/repropone, la pantalla se actualiza sola.
+    useLiveRefresh('challenges', () => { load(); }, id ? `id=eq.${id}` : undefined);
+    useLiveRefresh('matches', () => { load(); });
 
     if (fetching) {
         return (

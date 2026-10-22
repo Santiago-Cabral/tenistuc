@@ -1,6 +1,6 @@
 ================================================================================
 TENISTUC — CONTEXTO COMPLETO DEL PROYECTO (para el próximo agente)
-Actualizado: 2026-10-16
+Actualizado: 2026-10-22
 ================================================================================
 
 LEER PRIMERO. Este archivo resume todo lo que se hizo, lo que falta y las
@@ -61,15 +61,31 @@ src/
     appAlert.tsx                  SISTEMA DE ALERTAS CON MARCA (showAlert).
                                   NO VOLVER A USAR Alert.alert nativo.
   hooks/useNotifications.ts       Badge no leídas + useUnreadMessagesCount()
+  hooks/useLiveRefresh.ts         Suscripción a Supabase Realtime (postgres_changes)
+                                  por tabla: profiles/matches/challenges/tournaments.
+  hooks/useLiveProfile.ts         Parchea el perfil propio en el store cuando la BD
+                                  mueve su ELO/wins/losses/nivel.
+  hooks/usePushNotifications.ts   Estado real del push + botón "Activar
+                                  notificaciones" (usa usePushNotifications.ts).
   stores/
     authStore.ts                  Zustand: session/profile, signIn/signUp/signOut,
-                                  updateProfile, recordPrivacyConsent, deleteAccount.
+                                  updateProfile, patchProfile (parche en memoria),
+                                  recordPrivacyConsent, deleteAccount.
                                   PROFILE_COLUMNS excluye expo_push_token.
 supabase/
   schema.sql                      Esquema COMPLETO (refresco para DB nueva).
   migration_2026_10_14_match_scheduling.sql   matches.court_id + índice.
   migration_2026_10_14_oauth_username.sql     handle_new_user robusto (OAuth).
   migration_2026_10_14_security_realtime.sql  RLS avatars, realtime, expo_push_token.
+  migration_2026_10_21_elo_engine.sql   Motor de ELO versionado: el ELO se aplica
+                                      SÓLO al confirmar el resultado (status
+                                      'completed'), idempotente y suma cero
+                                      (matches.elo_delta_p1/p2). Agrega matches y
+                                      challenges a la publicación supabase_realtime.
+  repair_elo_legacy.sql            Script OPCIONAL: revierte los deltas de ELO que
+                                   aplicaba el trigger heredado al crear el desafío.
+  diagnostico_elo_v2.sql / _v3.sql / diagnostico_triggers_elo.sql
+                                   Consultas de diagnóstico del motor de ELO.
   migration_2026_09_16_mercadopago.sql        HISTÓRICO (MP eliminado; no aplicar
                                               en DB nueva).
 src/supabase/                     Proyecto CLI Supabase (config.toml) + Edge Functions
@@ -127,7 +143,7 @@ SESIÓN F — Fix doble login (app/index.tsx espera el profile), eas.json, eas-c
   como devDependency.
 
 SESIÓN G — Eliminación de MercadoPago + OAuth social + programación de partidos
-  (SIN COMMITEAR hasta ahora):
+  (COMMIT 1ec1aac):
   · MercadoPago ELIMINADO por completo del cliente y de las edge functions
     (borradas mp-oauth-url, mp-oauth-callback, create-mp-preference,
     check-mp-payment, mp-webhook, paymentsService.ts). organizerTabs/profile.tsx
@@ -152,6 +168,43 @@ SESIÓN G — Eliminación de MercadoPago + OAuth social + programación de part
   · eas.json: env EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY por
     perfil de build + appVersionSource "remote".
 
+SESIÓN H — Motor de ELO en la BD + Realtime en vivo + estado real del push
+  (COMMIT de esta sesión):
+  · MOTOR DE ELO (BD): supabase/migration_2026_10_21_elo_engine.sql. Antes el
+    ELO se aplicaba al CREAR el desafío (trigger heredado, hecho a mano y sin
+    versionar): un reto de "5 puntos" ya descontaba 16 ELO al rival aunque el
+    partido nunca se jugara. Ahora el ELO se aplica SOLO cuando el match pasa a
+    status='completed' (al confirmar el resultado), es idempotente (guarda el
+    delta en matches.elo_delta_p1/p2) y suma cero. La misma migración agrega
+    `matches` y `challenges` a la publicación supabase_realtime.
+    · repair_elo_legacy.sql: script OPCIONAL para revertir los deltas de más que
+      aplicaba el trigger heredado.
+  · REALTIME EN EL CLIENTE: nuevo hook genérico src/hooks/useLiveRefresh.ts
+    (postgres_changes por tabla, con filtro PostgREST opcional) y
+    src/hooks/useLiveProfile.ts (parchea el store con el ELO/wins/losses/nivel
+    propios). Se conectaron: home del atleta, app/matches.tsx,
+    src/screens/athlete/MatchesScreen.tsx, app/challenge/[id].tsx,
+    app/challenge-respond/[challengeId].tsx y RankingScreen (se reordena solo
+    cuando la BD mueve el ELO de alguien + pull-to-refresh).
+  · ESTADO REAL DEL PUSH: notificationService.ts ahora expone getPushState() y
+    enablePushNotifications() (distingue granted / denied / undetermined /
+    unsupported web / Expo Go en Android / emulador sin push). Nuevo hook
+    src/hooks/usePushNotifications.ts y tarjeta "Notificaciones" en
+    src/screens/shared/ProfileScreen.tsx con botón "Activar notificaciones" y
+    acceso a la bandeja.
+  · Badge de no leídas con campana en el header del home (athleteTabs/index).
+  · Navegación por tap de notificación más completa (challenge_accepted,
+    challenge_rejected, match_scheduled, match_result, match_confirmed,
+    fixture_ready, tournament_registration, etc.) y default → /notifications.
+  · clearPushToken() en signOut (el token de push es por dispositivo).
+  · FIX ELO/match_type: el match creado desde un desafío ahora conserva la
+    modalidad del desafío (match_type) para que el motor lo tenga en cuenta, y
+    el select de desafíos incluye match_type.
+  · app.json: plugin expo-notifications con color #2D6A4F, canal "default" y
+    subtitle "TenisTuc".
+  · BUILD: preview de Android subido a EAS (build 3de32785-b62b-4f54-bf27-ec14811e477b,
+    internal, v1.0.0 (2), SDK 57).
+
 --------------------------------------------------------------------------------
 5) ESTADO ACTUAL — PENDIENTES Y BLOQUEOS (IMPORTANTE)
 --------------------------------------------------------------------------------
@@ -159,6 +212,9 @@ APLICAR MIGRACIONES (SQL Editor) si no se corrieron todavía:
     supabase/migration_2026_10_14_oauth_username.sql
     supabase/migration_2026_10_14_security_realtime.sql
     supabase/migration_2026_10_14_match_scheduling.sql
+    supabase/migration_2026_10_21_elo_engine.sql   ← motor de ELO + realtime
+  OPCIONAL (corregir ELO ya aplicado por el trigger heredado):
+    supabase/repair_elo_legacy.sql
   y deployar las edge functions: notify y send-push.
     cd src/supabase  →  npx supabase functions deploy notify
                        npx supabase functions deploy send-push
@@ -187,6 +243,13 @@ PRUEBAS FUNCIONALES PENDIENTES:
     llega la notificación; programar partido (fecha/hora/cancha) → push a ambos
     jugadores; login social Google/Apple.
   · FCM/push en dev build (regenerar el dev client tras los cambios).
+  · ELO: confirmar un partido "por puntos" → el ELO de ambos cambia y el
+    ranking se reordena en vivo (probar que NO se descuenta al crear el
+    desafío y que NO descuenta dos veces al confirmar).
+  · Realtime: con la app abierta, el rival acepta/agenda/confirma → la lista
+    se actualiza sola, sin pull-to-refresh.
+  · Botón "Activar notificaciones" del perfil (y el aviso cuando el permiso
+    está denegado o la app corre en Expo Go / emulador).
 
 --------------------------------------------------------------------------------
 6) DATOS CLAVE
@@ -203,8 +266,13 @@ PRUEBAS FUNCIONALES PENDIENTES:
   npx tsc --noEmit                     # typecheck (mínimo obligatorio)
   npx expo start                       # dev
   eas build --platform android --profile development   # dev client (FCM)
+  eas build --platform android --profile preview       # APK interno (distribución)
   cd src/supabase; npx supabase functions deploy notify        # edge functions
   cd src/supabase; npx supabase functions deploy send-push
+
+  OJO con los builds: google-services.json está en .gitignore (no sube). El
+  secreto de proyecto GOOGLE_SERVICES_FILE (FILE_BASE64) lo resuelve
+  app.config.ts en el builder vía process.env.GOOGLE_SERVICES_FILE.
 
 --------------------------------------------------------------------------------
 8) NOTAS DE DISEÑO

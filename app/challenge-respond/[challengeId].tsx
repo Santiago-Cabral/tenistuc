@@ -15,6 +15,7 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '../../src/theme/ind
 import { Avatar, Badge, Button } from '../../src/components/ui/index';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useChallenges, Challenge } from '../../src/hooks/useChallenges';
+import { useLiveRefresh } from '../../src/hooks/useLiveRefresh';
 import { MATCH_TYPE_LABELS, affectsElo } from '../../src/services/matchService';
 
 const VENUES = [
@@ -55,6 +56,8 @@ export default function ChallengeRespondScreen() {
     }, [challengeId, getChallenge]);
 
     useEffect(() => { loadChallenge(); }, [loadChallenge]);
+
+    useLiveRefresh('challenges', () => { loadChallenge(); }, challengeId ? `id=eq.${challengeId}` : undefined);
 
     if (fetching) return (
         <SafeAreaView style={{ flex: 1, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' }}>
