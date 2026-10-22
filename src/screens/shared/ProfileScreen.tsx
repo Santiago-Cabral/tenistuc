@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity,
     StyleSheet, RefreshControl, Alert,
@@ -13,6 +13,8 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { Badge, Button, Card, SectionHeader } from '../../components/ui';
 import { useAuthStore } from '../../stores/authStore';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { useDynamicNotifications } from '../../dynamic-notifications';
+import { sampleDynamicNotification } from '../../notifications/dynamicNotificationService';
 import { supabase } from '../../lib/supabase';
 
 export default function ProfileScreen() {
@@ -21,6 +23,11 @@ export default function ProfileScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [globalRank, setGlobalRank] = useState<number | null>(null);
     const push = usePushNotifications();
+    const { trigger } = useDynamicNotifications();
+
+    const showSampleNotification = useCallback(() => {
+        trigger(sampleDynamicNotification());
+    }, [trigger]);
 
     const loadRank = async () => {
         if (!profile) return;
@@ -256,6 +263,18 @@ export default function ProfileScreen() {
                         >
                             <Ionicons name="file-tray-outline" size={16} color={Colors.onSurfaceVariant} />
                             <Text style={styles.pushInboxText}>Ver bandeja de notificaciones</Text>
+                            <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
+                        </TouchableOpacity>
+
+                        {/* Botón de prueba: dispara el overlay dinámico con una
+                            notificación de ejemplo (para QA). */}
+                        <TouchableOpacity
+                            onPress={showSampleNotification}
+                            activeOpacity={0.7}
+                            style={styles.pushInboxRow}
+                        >
+                            <Ionicons name="sparkles-outline" size={16} color={Colors.onSurfaceVariant} />
+                            <Text style={styles.pushInboxText}>Probar notificación dinámica</Text>
                             <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
                         </TouchableOpacity>
                     </Card>

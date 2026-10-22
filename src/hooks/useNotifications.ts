@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { router } from 'expo-router'
 import { useAuthStore } from '../stores/authStore'
 import { isPushAvailable, registerForPushNotifications, savePushToken } from '../notifications/notificationService'
+import { navigateToNotification } from '../notifications/notificationNavigation'
 import { supabase } from '../lib/supabase'
 
 // expo-notifications se carga de forma lazy (ver notificationService.ts):
@@ -63,44 +63,7 @@ async function loadNotificationsModule() {
 }
 
 function handleTap(data: Record<string, string>) {
-  const targetId =
-    data?.challenge_id ??
-    data?.tournament_id ??
-    data?.conversation_id ??
-    data?.match_id;
-
-  switch (data?.type) {
-    case 'challenge':
-    case 'challenge_received':
-    case 'challenge_accepted':
-    case 'challenge_rejected':
-      targetId
-        ? router.push(`/challenge/${targetId}` as any)
-        : router.push('/matches' as any)
-      break
-    case 'tournament_new':
-    case 'tournament_start':
-    case 'tournament_update':
-    case 'tournament_registration':
-    case 'fixture_ready':
-      targetId
-        ? router.push(`/tournament/${targetId}` as any)
-        : router.push('/athleteTabs/tournament' as any)
-      break
-    case 'message':
-      targetId
-        ? router.push(`/chat/${targetId}` as any)
-        : router.push('/athleteTabs/messages' as any)
-      break
-    case 'match_result':
-    case 'match_confirmed':
-    case 'match_scheduled':
-      router.push('/matches' as any)
-      break
-    default:
-      router.push('/notifications' as any)
-      break
-  }
+  navigateToNotification(data);
 }
 
 // Hook separado para badge de no leídas

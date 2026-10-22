@@ -205,6 +205,54 @@ SESIÓN H — Motor de ELO en la BD + Realtime en vivo + estado real del push
   · BUILD: preview de Android subido a EAS (build 3de32785-b62b-4f54-bf27-ec14811e477b,
     internal, v1.0.0 (2), SDK 57).
 
+SESIÓN I — Notificaciones dinámicas (overlay "gooey" con Skia) en la app
+  (COMMIT de esta sesión):
+  · Se integró al proyecto la librería de notificaciones dinámicas (overlay tipo
+    "gota" que se abre con efecto gooey) portada desde el ejemplo local
+    `expo-dynamic-notifications/`. ESA CARPETA ES GITIGNORED: sirve solo de
+    referencia, no se sube al repo ni entra en el bundle.
+  · DEPENDENCIAS NUEVAS: @shopify/react-native-skia 2.6.2 y expo-blur ~57.0.3.
+    Skia es un módulo nativo: el APK pesa ahora ~155 MB (4 ABIs).
+  · CÓDIGO NUEVO en src/dynamic-notifications/ (constantes, types, palette,
+    springs, context, logic, geometry, layout, hooks/ y components/).
+    Adaptaciones vs. el ejemplo: sin expo-symbols (es iOS-only) → Ionicons de
+    @expo/vector-icons; paleta del tema TenisTuc; sin react-native-teleport
+    (el overlay se renderiza como hermano de `children` dentro del provider).
+  · INTEGRACIÓN:
+      - app/_layout.tsx: se agregó GestureHandlerRootView (OBLIGATORIO para el
+        gesto de arrastrar/descartar) + <DynamicNotifications> + un componente
+        hijo (AppShell) que llama useDynamicNotificationFeed() (el hook necesita
+        el contexto del overlay para disparar).
+      - src/hooks/useDynamicNotificationFeed.ts: se suscribe al Realtime INSERT
+        de la tabla `notifications` (ya publicada en supabase_realtime) y
+        dispara el overlay; además muestra la pendiente no leída más reciente al
+        abrir la app (guarda el último id en AsyncStorage con la clave
+        "tenistuc:last-dynamic-notification").
+      - src/notifications/dynamicNotificationService.ts: convierte una fila de
+        `notifications` a IDynamicNotification (icono/color por tipo) y arma
+        una de ejemplo para QA.
+      - src/notifications/notificationNavigation.ts: navegación centralizada al
+        tocar la notificación; ahora la reutiliza también el tap de push
+        (src/hooks/useNotifications.ts, que ya no duplica el switch).
+      - src/notifications/typeTheme.ts: mapa de color/icono por tipo, ahora
+        compartido con la bandeja app/notifications.tsx (se borró el TYPE_THEME
+        local duplicado).
+      - src/screens/shared/ProfileScreen.tsx: botón "Probar notificación
+        dinámica" para QA manual del overlay.
+  · DECISIÓN: el overlay se dispara SOLO por Realtime INSERT (la edge function
+    `notify` inserta y manda push). No se reutiliza el listener de push en
+    foreground para no mostrar dos veces la misma notificación.
+  · VERIFICACIÓN: npx tsc --noEmit limpio; npx expo export --platform android
+    OK (bundle 6.2 MB); npx expo-doctor OK (solo warnings de patch de expo y
+    expo-router, preexistentes); expo prebuild android OK y Skia autolinkeado
+    (librnskia.so presente en las 4 ABIs del APK).
+  · BUILD: preview de Android subido a EAS (build 30ef0068-ef1e-4480-be6f-0f0c2c438246,
+    internal, v1.0.0, version code 2, SDK 57).
+    APK: https://expo.dev/artifacts/eas/OcOMytZallDAnxyrj_wJ3VTJkMpmXTZnVGpB2vcTPRU.apk
+    OJO: al instalar, Android puede pedir desinstalar la versión anterior
+    (mismo version code 2). Probar el botón "Probar notificación dinámica"
+    del perfil para ver el overlay sin esperar un evento real.
+
 --------------------------------------------------------------------------------
 5) ESTADO ACTUAL — PENDIENTES Y BLOQUEOS (IMPORTANTE)
 --------------------------------------------------------------------------------
@@ -250,6 +298,11 @@ PRUEBAS FUNCIONALES PENDIENTES:
     se actualiza sola, sin pull-to-refresh.
   · Botón "Activar notificaciones" del perfil (y el aviso cuando el permiso
     está denegado o la app corre en Expo Go / emulador).
+  · Notificaciones dinámicas (sesión I): instalar el APK nuevo y apretar
+    "Probar notificación dinámica" en el perfil → debe caer la gota y abrirse
+    la tarjeta. Después, con dos cuentas: el rival acepta un desafío → al
+    otro le tiene que caer el overlay SOLO (sin push duplicado). Verificar
+    también el arrastre hacia abajo para descartar y el toque para navegar.
 
 --------------------------------------------------------------------------------
 6) DATOS CLAVE
@@ -269,6 +322,10 @@ PRUEBAS FUNCIONALES PENDIENTES:
   eas build --platform android --profile preview       # APK interno (distribución)
   cd src/supabase; npx supabase functions deploy notify        # edge functions
   cd src/supabase; npx supabase functions deploy send-push
+
+  OJO con el typecheck: da errores dentro de expo-dynamic-notifications/ (el
+  ejemplo original, gitignored). No son de la app: mirar solo el resto de la
+  salida.
 
   OJO con los builds: google-services.json está en .gitignore (no sube). El
   secreto de proyecto GOOGLE_SERVICES_FILE (FILE_BASE64) lo resuelve

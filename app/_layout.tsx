@@ -14,10 +14,13 @@ import {
     PlusJakartaSans_600SemiBold,
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { View, ActivityIndicator } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Colors } from "../src/theme";
 import { useNotifications } from "../src/hooks/useNotifications";
 import { usePresence } from "../src/hooks/usePresence";
 import { useLiveProfile } from "../src/hooks/useLiveProfile";
+import { useDynamicNotificationFeed } from "../src/hooks/useDynamicNotificationFeed";
+import { DynamicNotifications, PALETTE } from "../src/dynamic-notifications";
 import { AppAlertHost } from "../src/services/appAlert";
 import { ensureNotificationPermission } from "../src/notifications/notificationService";
 
@@ -74,6 +77,29 @@ export default function RootLayout() {
             </View>
         );
     }
+
+    return (
+        // GestureHandlerRootView es obligatorio para que funcione el gesto de
+        // descartar (arrastrar) de la notificación dinámica.
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <DynamicNotifications
+                accent={Colors.primary}
+                islandColor={Colors.primary}
+                cardColor={PALETTE.card}
+                shadowColor={PALETTE.shadow}
+            >
+                <AppShell />
+            </DynamicNotifications>
+        </GestureHandlerRootView>
+    );
+}
+
+/**
+ * Va dentro de <DynamicNotifications> porque usa useDynamicNotificationFeed(),
+ * que necesita el contexto del overlay para disparar las notificaciones.
+ */
+function AppShell() {
+    useDynamicNotificationFeed();
 
     return (
         <>

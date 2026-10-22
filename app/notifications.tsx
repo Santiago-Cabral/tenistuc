@@ -14,6 +14,7 @@ import {
     AppNotification, NotificationType,
     getNotifications, markAllAsRead, markAsRead,
 } from '../src/services/notificationService';
+import { NOTIFICATION_TYPE_THEME } from '../src/notifications/typeTheme';
 
 type IconConfig = {
     icon: keyof typeof Ionicons.glyphMap;
@@ -21,21 +22,7 @@ type IconConfig = {
     fg: string;
 };
 
-const TYPE_THEME: Record<NotificationType, IconConfig> = {
-    challenge: { icon: 'flash', bg: Colors.primaryContainer, fg: Colors.primaryDim },
-    challenge_received: { icon: 'flash', bg: Colors.primaryContainer, fg: Colors.primaryDim },
-    challenge_accepted: { icon: 'checkmark-circle', bg: Colors.secondaryContainer, fg: Colors.onSecondaryContainer },
-    challenge_rejected: { icon: 'close-circle', bg: Colors.errorContainer, fg: Colors.error },
-    tournament_new: { icon: 'trophy', bg: Colors.tertiaryContainer, fg: Colors.onTertiaryContainer },
-    tournament_start: { icon: 'flag', bg: Colors.tertiaryContainer, fg: Colors.onTertiaryContainer },
-    tournament_registration: { icon: 'trophy', bg: Colors.tertiaryContainer, fg: Colors.onTertiaryContainer },
-    tournament_update: { icon: 'megaphone', bg: Colors.tertiaryContainer, fg: Colors.onTertiaryContainer },
-    fixture_ready: { icon: 'list', bg: Colors.tertiaryContainer, fg: Colors.onTertiaryContainer },
-    match_scheduled: { icon: 'calendar', bg: Colors.primaryContainer, fg: Colors.primaryDim },
-    message: { icon: 'chatbubble', bg: Colors.secondaryContainer, fg: Colors.onSecondaryContainer },
-    match_result: { icon: 'tennisball', bg: Colors.primaryContainer, fg: Colors.primaryDim },
-    match_confirmed: { icon: 'shield-checkmark', bg: Colors.primaryContainer, fg: Colors.primaryDim },
-};
+const TYPE_THEME: Record<NotificationType, IconConfig> = NOTIFICATION_TYPE_THEME;
 
 function timeAgo(iso: string) {
     const diffMs = Date.now() - new Date(iso).getTime();
