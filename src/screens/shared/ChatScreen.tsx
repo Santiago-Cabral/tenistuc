@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius } from '../../theme';
-import { Avatar } from '../../components/ui';
+import { Avatar, SkeletonList } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { isActuallyOnline } from '../../services/presenceService';
@@ -182,9 +182,7 @@ export default function ChatScreen() {
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
             >
                 {loading ? (
-                    <View style={styles.loader}>
-                        <ActivityIndicator color={Colors.primary} size="large" />
-                    </View>
+                    <SkeletonList count={6} variant="bubble" />
                 ) : (
                     <FlatList
                         ref={flatListRef}

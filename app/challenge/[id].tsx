@@ -1,15 +1,13 @@
 // app/challenge/[id].tsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     ScrollView,
-    ActivityIndicator,
     Modal,
     TextInput,
     TouchableOpacity,
-    Alert,
 } from 'react-native';
 import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +22,7 @@ import { Avatar } from '../../src/components/ui/Avatar';
 import { Badge } from '../../src/components/ui/Badge';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
+import { Skeleton } from '../../src/components/ui/Skeleton';
 import { MATCH_TYPE_LABELS, affectsElo } from '../../src/services/matchService';
 import { isActuallyOnline } from '../../src/services/presenceService';
 
@@ -86,6 +85,56 @@ function formatLocalDateTime(value: string | null): string {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function ChallengeSkeleton() {
+    return (
+        <SafeAreaView style={styles.safe} edges={['top']}>
+            <View style={styles.headerRow}>
+                <Skeleton width={26} height={26} radius={Radius.full} />
+                <Skeleton width={100} height={20} />
+                <Skeleton width={26} height={26} radius={Radius.full} />
+            </View>
+
+            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+                <Card style={styles.playersCard}>
+                    <View style={styles.skeletonPlayer}>
+                        <Skeleton width={64} height={64} radius={Radius.full} />
+                        <Skeleton width="80%" height={14} />
+                        <Skeleton width={44} height={11} />
+                    </View>
+                    <Skeleton width={24} height={18} />
+                    <View style={styles.skeletonPlayer}>
+                        <Skeleton width={64} height={64} radius={Radius.full} />
+                        <Skeleton width="80%" height={14} />
+                        <Skeleton width={44} height={11} />
+                    </View>
+                </Card>
+
+                <Skeleton width={96} height={26} radius={Radius.full} />
+
+                <Card style={styles.detailsCard}>
+                    {[0, 1, 2].map((item) => (
+                        <React.Fragment key={item}>
+                            <View style={styles.skeletonDetailRow}>
+                                <Skeleton width={20} height={20} radius={Radius.full} />
+                                <View style={styles.detailTextCol}>
+                                    <Skeleton width={90} height={11} />
+                                    <Skeleton width="65%" height={16} />
+                                </View>
+                            </View>
+                            {item < 2 && <View style={styles.divider} />}
+                        </React.Fragment>
+                    ))}
+                </Card>
+
+                <View style={styles.actionsCol}>
+                    <Skeleton height={48} radius={Radius.lg} />
+                    <Skeleton height={48} radius={Radius.lg} />
+                </View>
+            </ScrollView>
+        </SafeAreaView>
+    );
+}
+
 export default function ChallengeDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
@@ -96,7 +145,6 @@ export default function ChallengeDetailScreen() {
         rejectChallenge,
         cancelChallenge,
         reproposeChallenge,
-        loading,
     } = useChallenges();
 
     const [challenge, setChallenge] = useState<Challenge | null>(null);
@@ -109,31 +157,43 @@ export default function ChallengeDetailScreen() {
     const [newDate, setNewDate] = useState('');
     const [newVenue, setNewVenue] = useState('');
 
+    const hasLoadedRef = useRef(false);
+    const requestRef = useRef(0);
+    const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const load = useCallback(async () => {
-        if (!id) return;
-        setFetching(true);
+        if (!id) {
+            setFetching(false);
+            return;
+        }
+        if (!hasLoadedRef.current) setFetching(true);
+        const request = ++requestRef.current;
         const data = await getChallenge(id);
+        if (request !== requestRef.current) return;
         setChallenge(data);
+        hasLoadedRef.current = true;
         setFetching(false);
     }, [id, getChallenge]);
 
-    useEffect(() => {
-        load();
+    const scheduleLoad = useCallback(() => {
+        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = setTimeout(() => {
+            refreshTimerRef.current = null;
+            load();
+        }, 120);
     }, [load]);
 
-    // Si el rival acepta/rechaza/repropone, la pantalla se actualiza sola.
-    useLiveRefresh('challenges', () => { load(); }, id ? `id=eq.${id}` : undefined);
-    useLiveRefresh('matches', () => { load(); });
+    useEffect(() => {
+        hasLoadedRef.current = false;
+        load();
+        return () => {
+            if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+        };
+    }, [load]);
 
-    if (fetching) {
-        return (
-            <SafeAreaView style={styles.safe} edges={['top']}>
-                <View style={styles.center}>
-                    <ActivityIndicator color={Colors.primary} size="large" />
-                </View>
-            </SafeAreaView>
-        );
-    }
+    useLiveRefresh('challenges', scheduleLoad, id ? `id=eq.${id}` : undefined);
+
+    if (fetching) return <ChallengeSkeleton />;
 
     if (!challenge) {
         return (
@@ -172,7 +232,7 @@ export default function ChallengeDetailScreen() {
         setActionLoading(null);
         if (ok) {
             showAlert('Listo', 'Desafío aceptado, el partido fue agendado.');
-            load();
+            scheduleLoad();
         } else {
             showAlert('No se pudo aceptar', 'Intentá de nuevo en unos segundos.');
         }
@@ -188,7 +248,7 @@ export default function ChallengeDetailScreen() {
                     setActionLoading('reject');
                     const ok = await rejectChallenge(challenge.id);
                     setActionLoading(null);
-                    if (ok) load();
+                    if (ok) scheduleLoad();
                 },
             },
         ]);
@@ -204,7 +264,7 @@ export default function ChallengeDetailScreen() {
                     setActionLoading('cancel');
                     const ok = await cancelChallenge(challenge.id);
                     setActionLoading(null);
-                    if (ok) load();
+                    if (ok) scheduleLoad();
                 },
             },
         ]);
@@ -235,7 +295,7 @@ export default function ChallengeDetailScreen() {
         setActionLoading(null);
         if (ok) {
             setReproposeVisible(false);
-            load();
+            scheduleLoad();
         } else {
             showAlert('No se pudo actualizar', 'Intentá de nuevo.');
         }
@@ -486,6 +546,9 @@ const styles = StyleSheet.create({
     playerLevel: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
     vsCol: { alignItems: 'center', gap: Spacing.xs, paddingHorizontal: Spacing.sm },
     vsText: { ...Typography.titleMd, color: Colors.primary },
+
+    skeletonPlayer: { flex: 1, alignItems: 'center', gap: Spacing.sm },
+    skeletonDetailRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.base },
 
     statusRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.base, flexWrap: 'wrap' },
     proposedByText: { ...Typography.bodySm, color: Colors.onSurfaceVariant, flex: 1 },

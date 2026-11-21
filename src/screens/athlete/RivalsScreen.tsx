@@ -2,16 +2,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity,
-    StyleSheet, ActivityIndicator, Alert, TextInput,
+    StyleSheet, Alert, TextInput,
 } from 'react-native';
 import { showAlert } from '../../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
-import { Avatar, Badge, Card } from '../../components/ui';
+import { Avatar, Badge, Card, SkeletonList } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import {
+    AGE_CATEGORIES, AGE_CATEGORY_LABELS, ageCategoryLabel, type AgeCategory,
+} from '../../constants/ageCategories';
 import { isActuallyOnline } from '../../services/presenceService';
 import CreateChallengeModal from '../../components/challenges/CreateChallengeModal';
 
@@ -23,6 +26,8 @@ interface Rival {
     city: string | null;
     elo: number;
     level: string;
+    age_category: AgeCategory | null;
+    gender: 'femenino' | 'masculino' | 'otro' | null;
     wins: number;
     losses: number;
     is_online: boolean;
@@ -30,6 +35,19 @@ interface Rival {
 }
 
 type FilterKey = 'all' | 'level' | 'city' | 'online';
+type GenderFilter = 'all' | 'femenino' | 'masculino';
+
+const GENDER_OPTIONS: { value: GenderFilter; label: string }[] = [
+    { value: 'all', label: 'Todos' },
+    { value: 'femenino', label: 'Mujeres' },
+    { value: 'masculino', label: 'Hombres' },
+];
+
+const GENDER_LABELS: Record<string, string> = {
+    femenino: 'Mujer',
+    masculino: 'Hombre',
+    otro: 'Otro',
+};
 
 // Normaliza para comparar ciudades sin depender de mayúsculas/acentos:
 // "Tucumán" ↔ "tucuman" ↔ "San Miguel de Tucumán" (via includes).
@@ -54,6 +72,8 @@ export default function RivalsScreen() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<FilterKey>('all');
+    const [ageFilter, setAgeFilter] = useState<AgeCategory | 'all'>('all');
+    const [genderFilter, setGenderFilter] = useState<GenderFilter>('all');
 
     const [selectedRival, setSelectedRival] = useState<Rival | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
@@ -64,7 +84,7 @@ export default function RivalsScreen() {
         setLoading(true);
         const { data } = await supabase
             .from('profiles')
-            .select('id, full_name, username, avatar_url, city, elo, level, wins, losses, is_online, last_seen')
+            .select('id, full_name, username, avatar_url, city, elo, level, age_category, gender, wins, losses, is_online, last_seen')
             .neq('id', profile.id)
             .limit(80);
 
@@ -106,6 +126,14 @@ export default function RivalsScreen() {
             list = list.filter(r => isActuallyOnline(r));
         }
 
+        if (ageFilter !== 'all') {
+            list = list.filter(r => r.age_category === ageFilter);
+        }
+
+        if (genderFilter !== 'all') {
+            list = list.filter(r => r.gender === genderFilter);
+        }
+
         if (search.trim()) {
             const q = search.toLowerCase();
             list = list.filter(r =>
@@ -113,7 +141,7 @@ export default function RivalsScreen() {
             );
         }
         return list;
-    }, [rivals, filter, search, profile?.level, profile?.city]);
+    }, [rivals, filter, ageFilter, genderFilter, search, profile?.level, profile?.city]);
 
     const openChallengeModal = (rival: Rival) => {
         setSelectedRival(rival);
@@ -204,6 +232,8 @@ export default function RivalsScreen() {
         { key: 'online', label: 'En línea', icon: 'radio-button-on' },
     ];
 
+    const hasSecondaryFilters = filter !== 'all' || ageFilter !== 'all' || genderFilter !== 'all';
+
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
             <View style={styles.header}>
@@ -253,10 +283,50 @@ export default function RivalsScreen() {
                 })}
             </View>
 
-            {loading ? (
-                <View style={styles.loader}>
-                    <ActivityIndicator color={Colors.primary} size="large" />
+            <View style={styles.ageFiltersWrap}>
+                <Text style={styles.ageFiltersLabel}>EDAD</Text>
+                <View style={styles.ageFiltersRow}>
+                    {AGE_CATEGORIES.map(category => {
+                        const active = ageFilter === category;
+                        return (
+                            <TouchableOpacity
+                                key={category}
+                                onPress={() => setAgeFilter(active ? 'all' : category)}
+                                style={[styles.filterChip, active && styles.filterChipActive]}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                                    {AGE_CATEGORY_LABELS[category]}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
+            </View>
+
+            <View style={styles.ageFiltersWrap}>
+                <Text style={styles.ageFiltersLabel}>GÉNERO</Text>
+                <View style={styles.ageFiltersRow}>
+                    {GENDER_OPTIONS.map(option => {
+                        const active = genderFilter === option.value;
+                        return (
+                            <TouchableOpacity
+                                key={option.value}
+                                onPress={() => setGenderFilter(active ? 'all' : option.value)}
+                                style={[styles.filterChip, active && styles.filterChipActive]}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                                    {option.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </View>
+
+            {loading ? (
+                <SkeletonList count={6} />
             ) : (
                 <FlatList
                     data={filtered}
@@ -289,10 +359,24 @@ export default function RivalsScreen() {
                                         </View>
                                         <View style={styles.badgeRow}>
                                             <Badge
-                                                label={rival.level ?? 'Amateur I'}
+                                                label={rival.level ?? '6ta'}
                                                 color={Colors.primaryContainer}
                                                 textColor={Colors.primary}
                                             />
+                                            {ageCategoryLabel(rival.age_category) && (
+                                                <Badge
+                                                    label={ageCategoryLabel(rival.age_category)!}
+                                                    color={Colors.surfaceContainerHigh}
+                                                    textColor={Colors.onSurfaceVariant}
+                                                />
+                                            )}
+                                            {rival.gender && (
+                                                <Badge
+                                                    label={GENDER_LABELS[rival.gender] ?? rival.gender}
+                                                    color={Colors.surfaceContainerHigh}
+                                                    textColor={Colors.onSurfaceVariant}
+                                                />
+                                            )}
                                             <Text style={[styles.diffText, { color: diffColor }]}>{diffLabel}</Text>
                                         </View>
                                     </View>
@@ -325,14 +409,18 @@ export default function RivalsScreen() {
                             ) : (
                                 <>
                                     <Text style={styles.emptyText}>
-                                        {filter === 'all'
+                                        {!hasSecondaryFilters
                                             ? 'No se encontraron jugadores'
                                             : filter === 'city'
                                                 ? `No encontramos rivales en ${profile?.city} todavía`
                                                 : 'Nadie coincide con este filtro todavía'}
                                     </Text>
-                                    {filter !== 'all' && (
-                                        <TouchableOpacity onPress={() => setFilter('all')}>
+                                    {hasSecondaryFilters && (
+                                        <TouchableOpacity onPress={() => {
+                                            setFilter('all');
+                                            setAgeFilter('all');
+                                            setGenderFilter('all');
+                                        }}>
                                             <Text style={styles.emptyAction}>Ver todos los jugadores</Text>
                                         </TouchableOpacity>
                                     )}
@@ -403,6 +491,21 @@ const styles = StyleSheet.create({
     filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     filterChipText: { ...Typography.labelSm, color: Colors.onSurfaceVariant },
     filterChipTextActive: { color: Colors.onPrimary },
+    ageFiltersWrap: {
+        paddingHorizontal: Spacing.xl,
+        paddingBottom: Spacing.md,
+        gap: Spacing.sm,
+    },
+    ageFiltersLabel: {
+        ...Typography.labelSm,
+        color: Colors.onSurfaceVariant,
+        letterSpacing: 0.8,
+    },
+    ageFiltersRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+    },
 
     loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     list: { paddingHorizontal: Spacing.xl, gap: Spacing.md, paddingBottom: 100 },

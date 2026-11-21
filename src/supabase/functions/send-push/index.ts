@@ -11,6 +11,9 @@ import { createClient } from '@supabase/supabase-js'
 
 const EXPO_PUSH_URL = 'https://api.expo.dev/v2/push/send'
 
+const getEnv = (name: string): string | undefined =>
+  (globalThis as any).Deno?.env?.get?.(name) ?? (globalThis as any).process?.env?.[name]
+
 interface SendPushBody {
   userId: string
   title: string
@@ -35,10 +38,15 @@ async function handler(req: Request) {
     return new Response('Missing userId/title', { status: 400 })
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const supabaseUrl = getEnv('SUPABASE_URL')
+  const serviceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY') ?? getEnv('SUPABASE_SECRET_KEY')
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error('[send-push] missing environment configuration')
+    return new Response('Server misconfigured', { status: 500 })
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey)
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -47,9 +55,14 @@ async function handler(req: Request) {
     .single()
 
   if (!profile?.expo_push_token?.startsWith('ExponentPushToken')) {
-    return new Response(JSON.stringify({ sent: false, reason: 'no-token' }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return new Response(
+      JSON.stringify({
+        sent: false,
+        reason: 'no-token',
+        error: 'Este dispositivo no tiene un token push registrado. Activá las notificaciones primero.',
+      }),
+      { headers: { 'Content-Type': 'application/json' } },
+    )
   }
 
   const res = await fetch(EXPO_PUSH_URL, {
@@ -65,15 +78,34 @@ async function handler(req: Request) {
       data: data ?? {},
       sound: 'default',
       badge: 1,
+      priority: 'high',
+      channelId: 'default',
     }),
   })
 
-  if (!res.ok) {
-    console.error('[send-push] Expo push error', res.status, await res.text())
-    return new Response(JSON.stringify({ sent: false }), {
-      status: 502,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  const json = await res.json().catch(() => null)
+  const ticket = Array.isArray(json?.data) ? json.data[0] : json?.data
+
+  if (!res.ok || ticket?.status === 'error') {
+    const message =
+      ticket?.message ?? `Expo push error ${res.status}`
+    console.error('[send-push] Expo push error', message, ticket?.details ?? '')
+
+    // Token inválido/desinstalado: limpiarlo para no reintentar siempre.
+    if (ticket?.details?.error === 'DeviceNotRegistered') {
+      await supabase
+        .from('profiles')
+        .update({ expo_push_token: null })
+        .eq('id', userId)
+    }
+
+    return new Response(
+      JSON.stringify({ sent: false, error: message, details: ticket?.details ?? null }),
+      {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
   }
 
   return new Response(JSON.stringify({ sent: true }), {

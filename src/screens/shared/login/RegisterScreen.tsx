@@ -9,9 +9,10 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius } from '../../../theme/index';
-import { Button, InputField, PrivacyConsent } from '../../../components/ui/index';
+import { AgeCategoryField, Button, InputField, PrivacyConsent } from '../../../components/ui/index';
 import { useAuthStore } from '../../../stores/authStore';
 import { LEVELS, type Level } from '../../../constants/levels';
+import { DEFAULT_AGE_SELECTION, type AgeSelection } from '../../../constants/ageCategories';
 
 export default function RegisterScreen() {
     const router = useRouter();
@@ -21,7 +22,8 @@ export default function RegisterScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [level, setLevel] = useState<Level>('Amateur I');
+    const [level, setLevel] = useState<Level>('6ta');
+    const [ageSelection, setAgeSelection] = useState<AgeSelection>(DEFAULT_AGE_SELECTION);
     const [consent, setConsent] = useState(false);
     const [loading, setLoading] = useState(false);
 
@@ -44,7 +46,14 @@ export default function RegisterScreen() {
         }
         setLoading(true);
         try {
-            await signUp(email.trim().toLowerCase(), password, username.trim(), fullName.trim(), level);
+            await signUp(
+                email.trim().toLowerCase(),
+                password,
+                username.trim(),
+                fullName.trim(),
+                level,
+                ageSelection.category
+            );
             recordPrivacyConsent();
             showAlert(
                 '¡Cuenta creada!',
@@ -155,6 +164,11 @@ export default function RegisterScreen() {
                                 ))}
                             </View>
                         </ScrollView>
+
+                        <AgeCategoryField
+                            value={ageSelection}
+                            onChange={setAgeSelection}
+                        />
                     </View>
 
                     {/* Consentimiento */}

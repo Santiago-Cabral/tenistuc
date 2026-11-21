@@ -74,7 +74,8 @@ export const useChallenges = () => {
     };
 
     const getChallenge = useCallback(async (challengeId: string): Promise<Challenge | null> => {
-        return run(async () => {
+        setError(null);
+        try {
             const { data, error: err } = await supabase
                 .from('challenges')
                 .select(CHALLENGE_SELECT)
@@ -82,7 +83,10 @@ export const useChallenges = () => {
                 .single();
             if (err) throw err;
             return data as Challenge;
-        });
+        } catch (e: any) {
+            setError(e.message ?? 'Error desconocido');
+            return null;
+        }
     }, []);
 
     const getMyChallenges = useCallback(async (

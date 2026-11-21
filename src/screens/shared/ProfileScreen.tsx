@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity,
     StyleSheet, RefreshControl, Alert,
@@ -12,9 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { Badge, Button, Card, SectionHeader } from '../../components/ui';
 import { useAuthStore } from '../../stores/authStore';
+import { ageCategoryLabel } from '../../constants/ageCategories';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
-import { useDynamicNotifications } from '../../dynamic-notifications';
-import { sampleDynamicNotification } from '../../notifications/dynamicNotificationService';
 import { supabase } from '../../lib/supabase';
 
 export default function ProfileScreen() {
@@ -22,14 +21,11 @@ export default function ProfileScreen() {
     const { profile, signOut, fetchProfile, deleteAccount } = useAuthStore();
     const [refreshing, setRefreshing] = useState(false);
     const [globalRank, setGlobalRank] = useState<number | null>(null);
+    const ageLabel = ageCategoryLabel(profile?.age_category);
     const push = usePushNotifications();
-    const { trigger } = useDynamicNotifications();
-
-    const showSampleNotification = useCallback(() => {
-        trigger(sampleDynamicNotification());
-    }, [trigger]);
 
     const loadRank = async () => {
+
         if (!profile) return;
         const { count } = await supabase
             .from('profiles')
@@ -154,10 +150,17 @@ export default function ProfileScreen() {
 
                     <View style={styles.levelBadgeWrap}>
                         <Badge
-                            label={profile?.level ?? 'Amateur I'}
+                            label={profile?.level ?? '6ta'}
                             color="rgba(183,228,199,0.2)"
                             textColor={Colors.primaryContainer}
                         />
+                        {ageLabel && (
+                            <Badge
+                                label={ageLabel}
+                                color="rgba(255,255,255,0.18)"
+                                textColor={Colors.onPrimary}
+                            />
+                        )}
                     </View>
                 </LinearGradient>
 
@@ -224,6 +227,27 @@ export default function ProfileScreen() {
                         </Card>
                     )}
 
+                    {/* ── Beta: comentarios ── */}
+                    <TouchableOpacity
+                        onPress={() => router.push('/beta-feedback' as any)}
+                        activeOpacity={0.7}
+                        style={styles.betaCard}
+                    >
+                        <View style={styles.betaIconWrap}>
+                            <Ionicons name="chatbox-ellipses-outline" size={18} color={Colors.primary} />
+                        </View>
+                        <View style={styles.betaTextCol}>
+                            <View style={styles.betaTitleRow}>
+                                <Text style={styles.betaTitle}>Comentarios de la beta</Text>
+                                <Badge label="BETA" color={Colors.primaryContainer} textColor={Colors.primary} />
+                            </View>
+                            <Text style={styles.betaSub}>
+                                Sugerí ideas y votá las que más te gusten
+                            </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
+                    </TouchableOpacity>
+
                     {/* ── Notificaciones ── */}
                     <Card style={styles.pushCard}>
                         <View style={styles.pushHeaderRow}>
@@ -263,18 +287,6 @@ export default function ProfileScreen() {
                         >
                             <Ionicons name="file-tray-outline" size={16} color={Colors.onSurfaceVariant} />
                             <Text style={styles.pushInboxText}>Ver bandeja de notificaciones</Text>
-                            <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
-                        </TouchableOpacity>
-
-                        {/* Botón de prueba: dispara el overlay dinámico con una
-                            notificación de ejemplo (para QA). */}
-                        <TouchableOpacity
-                            onPress={showSampleNotification}
-                            activeOpacity={0.7}
-                            style={styles.pushInboxRow}
-                        >
-                            <Ionicons name="sparkles-outline" size={16} color={Colors.onSurfaceVariant} />
-                            <Text style={styles.pushInboxText}>Probar notificación dinámica</Text>
                             <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
                         </TouchableOpacity>
                     </Card>
@@ -373,7 +385,13 @@ const styles = StyleSheet.create({
         marginTop: Spacing.sm,
     },
     username: { ...Typography.bodyMd, color: 'rgba(183,228,199,0.75)' },
-    levelBadgeWrap: { marginTop: Spacing.sm },
+    levelBadgeWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: Spacing.sm,
+        marginTop: Spacing.sm,
+    },
 
     content: {
         paddingHorizontal: Spacing.xl,
@@ -461,8 +479,7 @@ const styles = StyleSheet.create({
         fontFamily: 'PlusJakartaSans_600SemiBold',
     },
 
-    pushCard: { gap: Spacing.md },
-    pushHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
+    pushCard: { gap: Spacing.md },    pushHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
     pushIconWrap: {
         width: 36, height: 36, borderRadius: 18,
         backgroundColor: Colors.primaryContainer,
@@ -477,6 +494,29 @@ const styles = StyleSheet.create({
         borderTopWidth: 1, borderTopColor: Colors.surfaceContainerLow,
     },
     pushInboxText: { ...Typography.bodyMd, color: Colors.onSurface, flex: 1 },
+
+    betaCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        backgroundColor: Colors.surfaceContainerLowest,
+        borderRadius: Radius.xl,
+        padding: Spacing.lg,
+        ...Shadow.ambient,
+    },
+    betaIconWrap: {
+        width: 36, height: 36, borderRadius: 18,
+        backgroundColor: Colors.primaryContainer,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    betaTextCol: { flex: 1, gap: 2 },
+    betaTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    betaTitle: {
+        ...Typography.bodyMd,
+        color: Colors.onSurface,
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+    },
+    betaSub: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
 
     signOutBtn: { marginTop: Spacing.sm },
     deleteBtn: {

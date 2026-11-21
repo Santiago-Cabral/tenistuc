@@ -1,6 +1,9 @@
 import { Platform } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import Constants from 'expo-constants'
 import { supabase } from '../lib/supabase'
+
+const PUSH_TOKEN_KEY = 'tenistuc:expo-push-token'
 
 // expo-notifications NO se importa en el top-level NI siquiera cuando se
 // está en Expo Go. En Android + Expo Go (SDK 53+) la importación devuelve
@@ -118,20 +121,63 @@ export async function ensureNotificationPermission(
   return status === 'granted'
 }
 
-export async function savePushToken(userId: string, token: string) {
-  const { error } = await supabase
+export async function savePushToken(userId: string, token: string): Promise<boolean> {
+  const { data, error } = await supabase
     .from('profiles')
     .update({ expo_push_token: token })
     .eq('id', userId)
+    .select('id')
 
-  if (error) console.error('[Notifications] Error guardando token:', error)
+  if (error || !data?.length) {
+    console.error('[Notifications] Error guardando token:', error ?? 'sin filas actualizadas')
+    return false
+  }
+
+  await AsyncStorage.setItem(PUSH_TOKEN_KEY, token).catch(() => {})
+  return true
 }
 
 export async function clearPushToken(userId: string) {
+  await AsyncStorage.removeItem(PUSH_TOKEN_KEY).catch(() => {})
   await supabase
     .from('profiles')
     .update({ expo_push_token: null })
     .eq('id', userId)
+}
+
+/**
+ * Push de prueba real (pasa por Expo Push, no es local). Devuelve el error
+ * exacto que reporta Expo para poder diagnosticar credenciales FCM/APNs.
+ */
+export async function sendTestPush(
+  userId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { data, error } = await supabase.functions.invoke('send-push', {
+    body: {
+      userId,
+      title: 'TenisTuc',
+      body: 'Las notificaciones push funcionan correctamente.',
+      data: { type: 'test' },
+    },
+  })
+
+  if (error) {
+    let message = error.message
+    try {
+      const context = (error as any).context
+      const payload = await context?.json?.()
+      if (payload?.error) message = payload.error
+    } catch {
+      // nos quedamos con el mensaje genérico
+    }
+    return { ok: false, error: message }
+  }
+
+  if (data?.sent) return { ok: true }
+  return {
+    ok: false,
+    error: data?.error ?? 'No se pudo enviar el push (sin token registrado).',
+  }
 }
 
 // ─── Estado de las notificaciones (para mostrarlo en la UI) ────────────────────
@@ -198,7 +244,18 @@ export async function getPushState(): Promise<PushState> {
   const { status } = await Notifications.getPermissionsAsync()
 
   if (status === 'granted') {
-    return { status: 'granted', message: 'Notificaciones activadas.', canRequest: false }
+    // El permiso del sistema puede estar concedido y aun así no haber token
+    // registrado (p. ej. falló FCM la primera vez). Sin token no llega nada
+    // fuera de la app, así que sólo damos por activado si lo guardamos.
+    const savedToken = await AsyncStorage.getItem(PUSH_TOKEN_KEY).catch(() => null)
+    if (savedToken) {
+      return { status: 'granted', message: 'Notificaciones activadas.', canRequest: false }
+    }
+    return {
+      status: 'undetermined',
+      message: 'El permiso está dado, pero falta registrar este dispositivo. Tocá para activar.',
+      canRequest: true,
+    }
   }
   if (status === 'denied') {
     return {
@@ -266,7 +323,18 @@ export async function enablePushNotifications(
     }
   }
 
-  await savePushToken(userId, token)
+  const saved = await savePushToken(userId, token)
+  if (!saved) {
+    return {
+      ok: false,
+      state: {
+        status: 'error',
+        message:
+          'Se obtuvo el token, pero no se pudo guardar en tu perfil. Revisá tu conexión e intentá de nuevo.',
+        canRequest: true,
+      },
+    }
+  }
 
   return {
     ok: true,

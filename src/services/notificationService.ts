@@ -26,6 +26,8 @@ export interface NotificationData {
     tournament_id?: string;
     conversation_id?: string;
     match_id?: string;
+    /** Avatar del remitente (lo manda la edge function `notify`). */
+    avatar_url?: string;
 }
 
 export interface AppNotification {

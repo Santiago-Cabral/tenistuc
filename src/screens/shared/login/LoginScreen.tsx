@@ -13,8 +13,7 @@ import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../../theme/index';
 import { Button, InputField, PrivacyConsent } from '../../../components/ui/index';
 import { useAuthStore } from '../../../stores/authStore';
-import { signInWithGoogle, signInWithApple } from '../../../services/authService';
-import type { OAuthProvider } from '../../../services/authService';
+import { signInWithGoogle } from '../../../services/authService';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -26,7 +25,7 @@ export default function LoginScreen() {
     const [consent, setConsent] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [socialLoading, setSocialLoading] = useState<OAuthProvider | null>(null);
+    const [socialLoading, setSocialLoading] = useState(false);
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -48,23 +47,21 @@ export default function LoginScreen() {
         }
     };
 
-    const handleOAuthSignIn = async (provider: OAuthProvider) => {
+    const handleGoogleSignIn = async () => {
         if (!consent) {
             showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad para usar TenisTuc.');
             return;
         }
-        setSocialLoading(provider);
+        setSocialLoading(true);
         try {
-            const signInProvider = provider === 'google' ? signInWithGoogle : signInWithApple;
-            const ok = await signInProvider();
+            const ok = await signInWithGoogle();
             // Si `ok` es false el usuario canceló: no mostramos error.
             // Si se creó la sesión, onAuthStateChange + AuthGuard redirigen.
             if (!ok) return;
         } catch (e: any) {
-            const label = provider === 'google' ? 'Google' : 'Apple';
-            showAlert(`Error con ${label}`, e.message ?? 'No se pudo iniciar sesión');
+            showAlert('Error con Google', e.message ?? 'No se pudo iniciar sesión');
         } finally {
-            setSocialLoading(null);
+            setSocialLoading(false);
         }
     };
 
@@ -175,33 +172,17 @@ export default function LoginScreen() {
                     {/* Social login */}
                     <View style={styles.socialRow}>
                         <TouchableOpacity
-                            style={[styles.socialBtn, (loading || socialLoading !== null) && styles.socialBtnDisabled]}
-                            onPress={() => handleOAuthSignIn('google')}
-                            disabled={loading || socialLoading !== null}
+                            style={[styles.socialBtn, (loading || socialLoading) && styles.socialBtnDisabled]}
+                            onPress={handleGoogleSignIn}
+                            disabled={loading || socialLoading}
                             activeOpacity={0.85}
                         >
-                            {socialLoading === 'google' ? (
+                            {socialLoading ? (
                                 <ActivityIndicator size="small" color={Colors.primary} />
                             ) : (
                                 <>
                                     <Ionicons name="logo-google" size={20} color={Colors.onSurface} />
                                     <Text style={styles.socialBtnText}>Google</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.socialBtn, (loading || socialLoading !== null) && styles.socialBtnDisabled]}
-                            onPress={() => handleOAuthSignIn('apple')}
-                            disabled={loading || socialLoading !== null}
-                            activeOpacity={0.85}
-                        >
-                            {socialLoading === 'apple' ? (
-                                <ActivityIndicator size="small" color={Colors.primary} />
-                            ) : (
-                                <>
-                                    <Ionicons name="logo-apple" size={22} color={Colors.onSurface} />
-                                    <Text style={styles.socialBtnText}>Apple</Text>
                                 </>
                             )}
                         </TouchableOpacity>

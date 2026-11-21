@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import {
     createCourt, updateCourt, Court, CourtInput,
@@ -29,6 +30,7 @@ export default function CourtFormModal({
     visible, onClose, organizerId, editingCourt, onSaved,
 }: Props) {
     const isEditing = !!editingCourt;
+    const insets = useSafeAreaInsets();
     const [name, setName] = useState('');
     const [address, setAddress] = useState('');
     const [surface, setSurface] = useState<CourtInput['surface']>('clay');
@@ -94,7 +96,7 @@ export default function CourtFormModal({
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
             <View style={styles.overlay}>
-                <View style={styles.container}>
+                <View style={[styles.container, { paddingBottom: Spacing.sm + insets.bottom }]}>
                     <View style={styles.header}>
                         <Text style={styles.title}>{isEditing ? 'Editar cancha' : 'Nueva cancha'}</Text>
                         <TouchableOpacity onPress={handleClose} disabled={loading}>

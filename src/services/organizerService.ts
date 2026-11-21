@@ -7,6 +7,12 @@ import { supabase } from '../lib/supabase';
 
 export type TournamentType = 'relampago' | 'por_fechas';
 
+/** Para quién está diseñado el torneo (restricción de género). */
+export type TournamentGender = 'todos' | 'femenino' | 'masculino';
+
+/** Categoría requerida para inscribirse ('todas' = sin restricción). */
+export type TournamentLevelFilter = 'todas' | '1era' | '2da' | '3era' | '4era' | '5ta' | '6ta';
+
 export interface Tournament {
     id: string;
     name: string;
@@ -20,6 +26,8 @@ export interface Tournament {
     location: string | null;
     starts_at: string | null;
     tournament_type: TournamentType;
+    allowed_gender: TournamentGender;
+    allowed_level: TournamentLevelFilter;
     organizer_id: string;
     created_at: string;
 }
@@ -136,6 +144,8 @@ export interface TournamentInput {
     elo_points?: number;
     image_url?: string;
     tournament_type?: TournamentType;
+    allowed_gender?: TournamentGender;
+    allowed_level?: TournamentLevelFilter;
 }
 
 /**
@@ -334,5 +344,32 @@ export async function markPaymentStatus(registrationId: string, status: 'paid' |
         .update({ payment_status: status })
         .eq('id', registrationId);
 
+    if (error) throw error;
+}
+
+/**
+ * Quita a un participante de un torneo (organizador).
+ * Si el fixture ya se generó, sus partidos quedan sin ese jugador
+ * (player1_id/player2_id en null) y se borra la inscripción.
+ */
+export async function removeParticipant(tournamentId: string, playerId: string, registrationId: string) {
+    const { error: m1 } = await supabase
+        .from('matches')
+        .update({ player1_id: null })
+        .eq('tournament_id', tournamentId)
+        .eq('player1_id', playerId);
+    if (m1) throw m1;
+
+    const { error: m2 } = await supabase
+        .from('matches')
+        .update({ player2_id: null })
+        .eq('tournament_id', tournamentId)
+        .eq('player2_id', playerId);
+    if (m2) throw m2;
+
+    const { error } = await supabase
+        .from('tournament_registrations')
+        .delete()
+        .eq('id', registrationId);
     if (error) throw error;
 }

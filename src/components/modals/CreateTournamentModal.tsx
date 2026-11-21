@@ -2,18 +2,24 @@
 import React, { useEffect, useState } from 'react';
 import {
     Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet,
-    Alert, Platform, KeyboardAvoidingView,
+    ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import { InputField } from '../ui/InputField';
 import { Button } from '../ui/Button';
+import { supabase } from '../../lib/supabase';
 import {
     createTournament, updateTournament,
     getTournamentDates, updateTournamentDate,
     Tournament, TournamentType, TournamentDateInput,
+    TournamentGender, TournamentLevelFilter,
 } from '../../services/organizerService';
 
 interface Props {
@@ -25,6 +31,22 @@ interface Props {
 }
 
 const NUM_FECHAS = 5;
+
+const GENDER_OPTIONS: { value: TournamentGender; label: string }[] = [
+    { value: 'todos', label: 'Todos' },
+    { value: 'femenino', label: 'Solo mujeres' },
+    { value: 'masculino', label: 'Solo hombres' },
+];
+
+const LEVEL_OPTIONS: { value: TournamentLevelFilter; label: string }[] = [
+    { value: 'todas', label: 'Todas' },
+    { value: '1era', label: '1era' },
+    { value: '2da', label: '2da' },
+    { value: '3era', label: '3era' },
+    { value: '4era', label: '4era' },
+    { value: '5ta', label: '5ta' },
+    { value: '6ta', label: '6ta' },
+];
 
 // Dado un viernes cualquiera, devuelve { start: viernes, end: domingo }
 function weekendFromFriday(friday: Date): { start: Date; end: Date } {
@@ -56,6 +78,7 @@ export default function CreateTournamentModal({
     visible, onClose, organizerId, editingTournament, onSaved,
 }: Props) {
     const isEditing = !!editingTournament;
+    const insets = useSafeAreaInsets();
 
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -66,6 +89,14 @@ export default function CreateTournamentModal({
     const [eloPoints, setEloPoints] = useState('');
 
     const [tournamentType, setTournamentType] = useState<TournamentType>('relampago');
+
+    // Foto de portada (fondo del torneo en la app)
+    const [imageUrl, setImageUrl] = useState<string | null>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
+
+    // Para quién es el torneo (restricciones de inscripción)
+    const [allowedGender, setAllowedGender] = useState<TournamentGender>('todos');
+    const [allowedLevel, setAllowedLevel] = useState<TournamentLevelFilter>('todas');
 
     // Relámpago: una sola fecha
     const [singleStart, setSingleStart] = useState<Date>(nextFriday(new Date()));
@@ -90,6 +121,9 @@ export default function CreateTournamentModal({
             setPrizeMoney(String(editingTournament.prize_money ?? ''));
             setEloPoints(String(editingTournament.elo_points ?? ''));
             setTournamentType(editingTournament.tournament_type ?? 'relampago');
+            setImageUrl(editingTournament.image_url ?? null);
+            setAllowedGender(editingTournament.allowed_gender ?? 'todos');
+            setAllowedLevel(editingTournament.allowed_level ?? 'todas');
 
             if (editingTournament.starts_at) {
                 setSingleStart(new Date(editingTournament.starts_at));
@@ -113,6 +147,9 @@ export default function CreateTournamentModal({
             setPrizeMoney('');
             setEloPoints('');
             setTournamentType('relampago');
+            setImageUrl(null);
+            setAllowedGender('todos');
+            setAllowedLevel('todas');
             setSingleStart(nextFriday(new Date()));
             setFechas(defaultFechas());
             setFechaIds(Array(NUM_FECHAS).fill(null));
@@ -133,6 +170,54 @@ export default function CreateTournamentModal({
                 next[idx] = date;
                 return next;
             });
+        }
+    };
+
+    // ── Foto de portada ───────────────────────────────────────────────────────
+
+    const pickCoverPhoto = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            showAlert('Permiso requerido', 'Necesitamos acceso a tu galería para cambiar la portada.');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [16, 9],
+            quality: 0.75,
+        });
+
+        if (result.canceled || !result.assets[0]) return;
+
+        const asset = result.assets[0];
+        setUploadingImage(true);
+        try {
+            const ext = (asset.uri.split('.').pop() ?? 'jpg').toLowerCase();
+            const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+            const path = `${organizerId}/cover-${Date.now()}.${ext}`;
+
+            const file = new FileSystem.File(asset.uri);
+            const bytes = await file.bytes();
+
+            const { error: uploadError } = await supabase.storage
+                .from('tournament-images')
+                .upload(path, bytes.buffer, {
+                    contentType: mime,
+                    upsert: true,
+                });
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('tournament-images')
+                .getPublicUrl(path);
+
+            setImageUrl(`${publicUrl}?t=${Date.now()}`);
+        } catch (e: any) {
+            showAlert('Error al subir foto', e.message ?? 'Intentá de nuevo');
+        } finally {
+            setUploadingImage(false);
         }
     };
 
@@ -167,6 +252,9 @@ export default function CreateTournamentModal({
                 prize_money: prizeMoney ? Number(prizeMoney) : 0,
                 elo_points: eloPoints ? Number(eloPoints) : 0,
                 tournament_type: tournamentType,
+                image_url: imageUrl ?? undefined,
+                allowed_gender: allowedGender,
+                allowed_level: allowedLevel,
                 starts_at: tournamentType === 'relampago'
                     ? singleStart.toISOString()
                     : fechas[0].toISOString(), // primera fecha como referencia general del circuito
@@ -223,7 +311,7 @@ export default function CreateTournamentModal({
                 style={styles.overlay}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
-                <View style={styles.sheet}>
+                <View style={[styles.sheet, { paddingBottom: insets.bottom }]}>
                     <View style={styles.header}>
                         <Text style={styles.title}>{isEditing ? 'Editar torneo' : 'Nuevo torneo'}</Text>
                         <TouchableOpacity onPress={onClose}>
@@ -235,6 +323,33 @@ export default function CreateTournamentModal({
                         <InputField label="Nombre del torneo" value={name} onChangeText={setName} placeholder="Ej: Copa Primavera" />
                         <InputField label="Descripción" value={description} onChangeText={setDescription} placeholder="Opcional" />
                         <InputField label="Sede" value={location} onChangeText={setLocation} placeholder="Ej: Lawn Tenis Club" />
+
+                        {/* ── Foto de portada ─────────────────────────────── */}
+                        <Text style={styles.sectionLabel}>Foto de portada</Text>
+                        <TouchableOpacity
+                            style={styles.coverWrap}
+                            onPress={pickCoverPhoto}
+                            disabled={uploadingImage}
+                            activeOpacity={0.85}
+                        >
+                            {imageUrl ? (
+                                <ExpoImage source={{ uri: imageUrl }} style={styles.coverImage} contentFit="cover" />
+                            ) : (
+                                <View style={styles.coverPlaceholder}>
+                                    <Ionicons name="image-outline" size={32} color={Colors.onSurfaceVariant} />
+                                </View>
+                            )}
+                            <View style={styles.coverOverlay}>
+                                {uploadingImage ? (
+                                    <ActivityIndicator color="#fff" size="small" />
+                                ) : (
+                                    <Ionicons name="camera" size={20} color="#fff" />
+                                )}
+                            </View>
+                        </TouchableOpacity>
+                        <Text style={styles.helperText}>
+                            {uploadingImage ? 'Subiendo foto...' : 'Es el fondo que se ve en el torneo dentro de la app.'}
+                        </Text>
 
                         <View style={styles.row}>
                             <View style={styles.rowItem}>
@@ -288,6 +403,38 @@ export default function CreateTournamentModal({
                                 </Text>
                                 <Text style={styles.typeDesc}>Circuito de 5 fechas (vie-dom)</Text>
                             </TouchableOpacity>
+                        </View>
+
+                        {/* ── ¿Para quién es? ──────────────────────────────── */}
+                        <Text style={styles.sectionLabel}>¿Para quién es el torneo?</Text>
+                        <Text style={styles.helperText}>Solo esos jugadores van a poder inscribirse.</Text>
+                        <View style={styles.chipsRow}>
+                            {GENDER_OPTIONS.map((g) => (
+                                <TouchableOpacity
+                                    key={g.value}
+                                    style={[styles.chip, allowedGender === g.value && styles.chipActive]}
+                                    onPress={() => setAllowedGender(g.value)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={[styles.chipText, allowedGender === g.value && styles.chipTextActive]}>
+                                        {g.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <View style={styles.chipsRow}>
+                            {LEVEL_OPTIONS.map((l) => (
+                                <TouchableOpacity
+                                    key={l.value}
+                                    style={[styles.chip, allowedLevel === l.value && styles.chipActive]}
+                                    onPress={() => setAllowedLevel(l.value)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={[styles.chipText, allowedLevel === l.value && styles.chipTextActive]}>
+                                        {l.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
                         </View>
 
                         {/* ── Relámpago: una fecha ──────────────────────────── */}
@@ -414,6 +561,32 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.base, paddingVertical: Spacing.base,
     },
     dateRowText: { ...Typography.bodyMd, color: Colors.onSurface },
+
+    coverWrap: {
+        height: 140, borderRadius: Radius.lg, overflow: 'hidden', position: 'relative',
+    },
+    coverImage: { flex: 1 },
+    coverPlaceholder: {
+        flex: 1, backgroundColor: Colors.surfaceContainerLow,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    coverOverlay: {
+        position: 'absolute', right: 10, bottom: 10,
+        width: 36, height: 36, borderRadius: 18,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        alignItems: 'center', justifyContent: 'center',
+    },
+
+    chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    chip: {
+        paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm,
+        borderRadius: Radius.full, borderWidth: 1.5,
+        borderColor: Colors.surfaceContainerHigh,
+        backgroundColor: Colors.surfaceContainerLowest,
+    },
+    chipActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryContainer },
+    chipText: { ...Typography.labelSm, fontSize: 12, color: Colors.onSurfaceVariant },
+    chipTextActive: { color: Colors.primaryDim },
 
     fechaCard: {
         flexDirection: 'row', alignItems: 'center', gap: Spacing.base,

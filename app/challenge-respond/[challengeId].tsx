@@ -29,7 +29,7 @@ const VENUES = [
 
 export default function ChallengeRespondScreen() {
     const router = useRouter();
-    const { id: challengeId } = useLocalSearchParams<{ id: string }>();
+    const { challengeId } = useLocalSearchParams<{ challengeId: string }>();
     const { profile } = useAuthStore();
     const { getChallenge, acceptChallenge, rejectChallenge, reproposeChallenge, loading, error } = useChallenges();
 

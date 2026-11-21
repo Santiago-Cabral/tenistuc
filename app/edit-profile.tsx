@@ -12,9 +12,10 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../src/theme/index';
-import { InputField, Button, Chip } from '../src/components/ui';
+import { AgeCategoryField, InputField, Button, Chip } from '../src/components/ui';
 import { useAuthStore } from '../src/stores/authStore';
 import { LEVELS, type Level } from '../src/constants/levels';
+import { ageSelectionFromCategory, type AgeSelection } from '../src/constants/ageCategories';
 import { supabase } from '../src/lib/supabase';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -23,6 +24,12 @@ const PLAY_STYLES = [
     'Drive Diestro', 'Drive Zurdo',
     'Revés a dos manos', 'Revés a una mano',
     'Saque plano', 'Saque con efecto',
+];
+
+const GENDER_OPTIONS: { value: 'femenino' | 'masculino' | 'otro'; label: string }[] = [
+    { value: 'femenino', label: 'Mujer' },
+    { value: 'masculino', label: 'Hombre' },
+    { value: 'otro', label: 'Otro' },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -36,7 +43,11 @@ export default function EditProfileScreen() {
     const [city, setCity] = useState(profile?.city ?? '');
     const [club, setClub] = useState(profile?.club ?? '');
     const [bio, setBio] = useState(profile?.bio ?? '');
-    const [level, setLevel] = useState<Level>(profile?.level ?? 'Amateur I');
+    const [level, setLevel] = useState<Level>(profile?.level ?? '6ta');
+    const [ageSelection, setAgeSelection] = useState<AgeSelection>(
+        () => ageSelectionFromCategory(profile?.age_category)
+    );
+    const [gender, setGender] = useState<'femenino' | 'masculino' | 'otro' | null>(profile?.gender ?? null);
     const [selectedStyles, setSelectedStyles] = useState<string[]>(profile?.play_style ?? []);
     const [avatarUri, setAvatarUri] = useState<string | null>(profile?.avatar_url ?? null);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -125,6 +136,8 @@ export default function EditProfileScreen() {
                 club: club.trim() || null,
                 bio: bio.trim() || null,
                 level,
+                age_category: ageSelection.category,
+                gender,
                 play_style: selectedStyles,
             });
             router.back();
@@ -275,6 +288,36 @@ export default function EditProfileScreen() {
                         </View>
                     )}
 
+                    {/* ── Categoría de edad ── */}
+                    {profile?.role === 'athlete' && (
+                        <View style={styles.section}>
+                            <AgeCategoryField
+                                value={ageSelection}
+                                onChange={setAgeSelection}
+                            />
+                        </View>
+                    )}
+
+                    {/* ── Género (para torneos exclusivos) ── */}
+                    {profile?.role === 'athlete' && (
+                        <View style={styles.section}>
+                            <Text style={styles.sectionLabel}>GÉNERO</Text>
+                            <Text style={styles.genderHint}>
+                                Algunos torneos son solo para mujeres o solo para hombres.
+                            </Text>
+                            <View style={styles.stylesGrid}>
+                                {GENDER_OPTIONS.map(g => (
+                                    <Chip
+                                        key={g.value}
+                                        label={g.label}
+                                        active={gender === g.value}
+                                        onPress={() => setGender(g.value)}
+                                    />
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
                     {/* ── Estilo de juego (solo athletes) ── */}
                     {profile?.role === 'athlete' && (
                         <View style={styles.section}>
@@ -291,7 +334,7 @@ export default function EditProfileScreen() {
                             </View>
                         </View>
                     )}
-
+                        
                     {/* ── Botón guardar (al fondo) ── */}
                     <Button
                         label="Guardar cambios"
@@ -405,5 +448,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: Spacing.sm,
+    },
+    genderHint: {
+        ...Typography.bodySm,
+        color: Colors.onSurfaceVariant,
+        marginBottom: Spacing.md,
     },
 });

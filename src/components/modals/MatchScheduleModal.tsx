@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import { scheduleMatch } from '../../services/fixtureService';
@@ -47,6 +48,7 @@ export default function MatchScheduleModal({
     const [courtId, setCourtId] = useState<string | null>(null);
     const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
     const [loading, setLoading] = useState(false);
+    const insets = useSafeAreaInsets();
 
     useEffect(() => {
         if (!visible) return;
@@ -153,7 +155,7 @@ export default function MatchScheduleModal({
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
             <View style={styles.overlay}>
-                <View style={styles.container}>
+                <View style={[styles.container, { paddingBottom: Spacing.sm + insets.bottom }]}>
                     <View style={styles.header}>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.title}>Programar partido</Text>

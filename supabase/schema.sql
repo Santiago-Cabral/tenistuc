@@ -10,7 +10,7 @@ create extension if not exists "uuid-ossp";
 
 -- ──────────────────────────────────────────────────────────────
 -- 2) FUNCIÓN: crear perfil automáticamente al registrarse
---    (el registro manda username, full_name, role y level en user_metadata)
+--    (el registro manda username, full_name, role, level y age_category en user_metadata)
 -- ──────────────────────────────────────────────────────────────
 create or replace function public.handle_new_user()
 returns trigger
@@ -33,7 +33,7 @@ begin
     candidate := base_username;
     loop
         begin
-            insert into public.profiles (id, username, full_name, role, level)
+            insert into public.profiles (id, username, full_name, role, level, age_category)
             values (
                 new.id,
                 candidate,
@@ -43,7 +43,8 @@ begin
                     ''
                 ),
                 coalesce(new.raw_user_meta_data ->> 'role', 'athlete'),
-                coalesce(new.raw_user_meta_data ->> 'level', 'Amateur I')
+                coalesce(new.raw_user_meta_data ->> 'level', '6ta'),
+                coalesce(nullif(new.raw_user_meta_data ->> 'age_category', ''), 'libre')
             )
             on conflict (id) do nothing;
             return new;
@@ -71,12 +72,15 @@ create table if not exists public.profiles (
     club              text,
     elo               integer not null default 1000,
     globalRank        integer,
-    level             text not null default 'Amateur I'
+    level             text not null default '6ta'
                       check (level in (
-                          'Amateur I', 'Amateur II', 'Intermedio', 'Avanzado',
-                          'Competitivo', 'Semi-Pro I', 'Semi-Pro II',
-                          'Pro I', 'Pro II', 'Elite', 'Legendary'
+                          '1era', '2da', '3era', '4ta', '5ta', '6ta'
                       )),
+    age_category      text not null default 'libre'
+                      check (age_category in (
+                          'libre', '+30', '+40', '+50', '+60', '+70', '+80'
+                      )),
+    gender            text check (gender in ('femenino', 'masculino', 'otro')),
     wins              integer not null default 0,
     losses            integer not null default 0,
     play_style        text[] not null default '{}',
@@ -89,6 +93,7 @@ create table if not exists public.profiles (
     created_at        timestamptz not null default now()
 );
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
     after insert on auth.users
     for each row execute procedure public.handle_new_user();
@@ -209,6 +214,11 @@ create table if not exists public.tournaments (
     starts_at       timestamptz,
     tournament_type text not null default 'relampago'
                     check (tournament_type in ('relampago', 'por_fechas')),
+    -- para quién está diseñado el torneo (restricciones de inscripción)
+    allowed_gender text not null default 'todos'
+                    check (allowed_gender in ('todos', 'femenino', 'masculino')),
+    allowed_level  text not null default 'todas'
+                    check (allowed_level in ('todas', '1era', '2da', '3era', '4ta', '5ta', '6ta')),
     organizer_id    uuid not null references public.profiles (id) on delete cascade,
     created_at      timestamptz not null default now()
 );
@@ -217,6 +227,8 @@ create index if not exists idx_tournaments_organizer on public.tournaments (orga
 create index if not exists idx_tournaments_status on public.tournaments (status);
 
 -- --- 8b) FK de matches → tournaments (se define después por orden de creación)
+alter table public.matches
+    drop constraint if exists matches_tournament_id_fkey;
 alter table public.matches
     add constraint matches_tournament_id_fkey
     foreign key (tournament_id) references public.tournaments (id) on delete cascade;
@@ -296,6 +308,29 @@ create table if not exists public.notifications (
 );
 
 create index if not exists idx_notifications_user on public.notifications (user_id, created_at desc);
+
+alter table public.notifications drop constraint if exists notifications_type_check;
+
+alter table public.notifications add constraint notifications_type_check
+check (type in (
+    'message',
+    'challenge',
+    'challenge_received',
+    'challenge_accepted',
+    'challenge_rejected',
+    'tournament',
+    'tournament_new',
+    'tournament_start',
+    'tournament_update',
+    'tournament_registration',
+    'fixture_ready',
+    'match_scheduled',
+    'match_result',
+    'match_confirmed',
+    'payment',
+    'system',
+    'test'
+));
 
 -- ──────────────────────────────────────────────────────────────
 -- 12b) CUENTAS MERCADOPAGO DE ORGANIZADORES (modo marketplace)
@@ -463,6 +498,8 @@ as $$
 declare
     t public.tournaments%rowtype;
     v_count integer;
+    v_gender text;
+    v_level text;
 begin
     select * into t from public.tournaments where id = new.tournament_id;
 
@@ -476,6 +513,31 @@ begin
         where tournament_id = new.tournament_id;
         if v_count >= t.max_players then
             raise exception 'El torneo alcanzó su cupo máximo';
+        end if;
+    end if;
+
+    -- Torneos exclusivos por género (ej: solo mujeres)
+    if t.allowed_gender is not null and t.allowed_gender <> 'todos' then
+        select p.gender into v_gender
+        from public.profiles p
+        where p.id = new.player_id;
+        if v_gender is null or v_gender <> t.allowed_gender then
+            raise exception 'Este torneo es solo para %',
+                case t.allowed_gender
+                    when 'femenino' then 'mujeres'
+                    when 'masculino' then 'hombres'
+                    else t.allowed_gender
+                end;
+        end if;
+    end if;
+
+    -- Torneos exclusivos por categoría (ej: solo 6ta)
+    if t.allowed_level is not null and t.allowed_level <> 'todas' then
+        select p.level into v_level
+        from public.profiles p
+        where p.id = new.player_id;
+        if v_level is null or v_level <> t.allowed_level then
+            raise exception 'Este torneo es solo para la categoría %', t.allowed_level;
         end if;
     end if;
 
@@ -520,6 +582,98 @@ create policy "Users can delete their avatars" on storage.objects
         and (storage.foldername(name))[1] = auth.uid()::text
     );
 
+-- 13a) STORAGE: bucket público "tournament-images" (foto de portada de torneos)
+insert into storage.buckets (id, name, public)
+values ('tournament-images', 'tournament-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "Public tournament images read" on storage.objects;
+create policy "Public tournament images read" on storage.objects
+    for select using (bucket_id = 'tournament-images');
+
+drop policy if exists "Users can upload tournament images" on storage.objects;
+create policy "Users can upload tournament images" on storage.objects
+    for insert to authenticated with check (
+        bucket_id = 'tournament-images'
+        and (storage.foldername(name))[1] = auth.uid()::text
+    );
+
+drop policy if exists "Users can update their tournament images" on storage.objects;
+create policy "Users can update their tournament images" on storage.objects
+    for update to authenticated using (
+        bucket_id = 'tournament-images'
+        and (storage.foldername(name))[1] = auth.uid()::text
+    );
+
+drop policy if exists "Users can delete their tournament images" on storage.objects;
+create policy "Users can delete their tournament images" on storage.objects
+    for delete to authenticated using (
+        bucket_id = 'tournament-images'
+        and (storage.foldername(name))[1] = auth.uid()::text
+    );
+
+-- ──────────────────────────────────────────────────────────────
+-- 13b) BETA FEEDBACK (comentarios de la beta, votos y reportes)
+--      Estilo Product Hunt: el más votado arriba (votes_count desc).
+-- ──────────────────────────────────────────────────────────────
+create table if not exists public.beta_feedback (
+    id          uuid primary key default gen_random_uuid(),
+    user_id     uuid not null references public.profiles (id) on delete cascade,
+    content     text not null check (char_length(content) between 1 and 500),
+    votes_count integer not null default 0,
+    created_at  timestamptz not null default now()
+);
+
+-- Un voto por usuario y comentario (PK compuesta)
+create table if not exists public.beta_feedback_votes (
+    feedback_id uuid not null references public.beta_feedback (id) on delete cascade,
+    user_id     uuid not null references public.profiles (id) on delete cascade,
+    created_at  timestamptz not null default now(),
+    primary key (feedback_id, user_id)
+);
+
+-- Un reporte por usuario y comentario (PK compuesta)
+create table if not exists public.beta_feedback_reports (
+    feedback_id uuid not null references public.beta_feedback (id) on delete cascade,
+    reporter_id uuid not null references public.profiles (id) on delete cascade,
+    reason      text not null check (reason in ('spam', 'ofensivo', 'acoso', 'otro')),
+    created_at  timestamptz not null default now(),
+    primary key (feedback_id, reporter_id)
+);
+
+create index if not exists idx_beta_feedback_rank
+    on public.beta_feedback (votes_count desc, created_at desc);
+create index if not exists idx_beta_feedback_votes_user
+    on public.beta_feedback_votes (user_id);
+create index if not exists idx_beta_feedback_reports_reporter
+    on public.beta_feedback_reports (reporter_id);
+
+-- Contador de votos mantenido por trigger (security definer: actualiza
+-- beta_feedback sin depender de la RLS de quien vota).
+create or replace function public.sync_beta_feedback_votes_count()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+    if (tg_op = 'INSERT') then
+        update public.beta_feedback
+        set votes_count = votes_count + 1
+        where id = new.feedback_id;
+    elsif (tg_op = 'DELETE') then
+        update public.beta_feedback
+        set votes_count = votes_count - 1
+        where id = old.feedback_id;
+    end if;
+    return null;
+end;
+$$;
+
+drop trigger if exists on_beta_feedback_votes_changed on public.beta_feedback_votes;
+create trigger on_beta_feedback_votes_changed
+    after insert or delete on public.beta_feedback_votes
+    for each row execute function public.sync_beta_feedback_votes_count();
+
 -- ──────────────────────────────────────────────────────────────
 -- 14) ROW LEVEL SECURITY
 --    El cliente usa la anon key (rol autenticado). El edge function
@@ -536,6 +690,9 @@ alter table public.tournament_dates enable row level security;
 alter table public.tournament_registrations enable row level security;
 alter table public.courts enable row level security;
 alter table public.notifications enable row level security;
+alter table public.beta_feedback enable row level security;
+alter table public.beta_feedback_votes enable row level security;
+alter table public.beta_feedback_reports enable row level security;
 
 -- PROFILES
 drop policy if exists "Profiles are publicly viewable" on public.profiles;
@@ -592,6 +749,13 @@ drop policy if exists "Players can view matches" on public.matches;
 create policy "Players can view matches" on public.matches
     for select using (
         player1_id = auth.uid() or player2_id = auth.uid() or created_by = auth.uid()
+        -- jugadores inscriptos al torneo: ven el fixture completo
+        -- (cuadro, fechas y canchas asignadas) en la app
+        or exists (
+            select 1 from public.tournament_registrations tr
+            where tr.tournament_id = matches.tournament_id
+              and tr.player_id = auth.uid()
+        )
     );
 
 drop policy if exists "Players can create matches" on public.matches;
@@ -679,6 +843,15 @@ drop policy if exists "Players can unregister" on public.tournament_registration
 create policy "Players can unregister" on public.tournament_registrations
     for delete using (player_id = auth.uid());
 
+drop policy if exists "Organizers can remove participants" on public.tournament_registrations;
+create policy "Organizers can remove participants" on public.tournament_registrations
+    for delete using (
+        exists (
+            select 1 from public.tournaments t
+            where t.id = tournament_id and t.organizer_id = auth.uid()
+        )
+    );
+
 -- COURTS
 drop policy if exists "Courts are publicly viewable" on public.courts;
 create policy "Courts are publicly viewable" on public.courts
@@ -696,6 +869,41 @@ create policy "Users can view their notifications" on public.notifications
 drop policy if exists "Users can update their notifications" on public.notifications;
 create policy "Users can update their notifications" on public.notifications
     for update using (user_id = auth.uid());
+
+-- BETA FEEDBACK
+drop policy if exists "Beta feedback is viewable" on public.beta_feedback;
+create policy "Beta feedback is viewable" on public.beta_feedback
+    for select using (true);
+
+drop policy if exists "Users can create their own beta feedback" on public.beta_feedback;
+create policy "Users can create their own beta feedback" on public.beta_feedback
+    for insert with check (user_id = auth.uid());
+
+drop policy if exists "Users can delete their own beta feedback" on public.beta_feedback;
+create policy "Users can delete their own beta feedback" on public.beta_feedback
+    for delete using (user_id = auth.uid());
+
+-- BETA FEEDBACK VOTES
+drop policy if exists "Beta feedback votes are viewable" on public.beta_feedback_votes;
+create policy "Beta feedback votes are viewable" on public.beta_feedback_votes
+    for select using (true);
+
+drop policy if exists "Users can vote as themselves" on public.beta_feedback_votes;
+create policy "Users can vote as themselves" on public.beta_feedback_votes
+    for insert with check (user_id = auth.uid());
+
+drop policy if exists "Users can remove their own vote" on public.beta_feedback_votes;
+create policy "Users can remove their own vote" on public.beta_feedback_votes
+    for delete using (user_id = auth.uid());
+
+-- BETA FEEDBACK REPORTS (solo el reportante ve sus propios reportes)
+drop policy if exists "Users can view their own reports" on public.beta_feedback_reports;
+create policy "Users can view their own reports" on public.beta_feedback_reports
+    for select using (reporter_id = auth.uid());
+
+drop policy if exists "Users can report as themselves" on public.beta_feedback_reports;
+create policy "Users can report as themselves" on public.beta_feedback_reports
+    for insert with check (reporter_id = auth.uid());
 
 -- ──────────────────────────────────────────────────────────────
 -- 14b) ALTERS PARA BASES EXISTENTES (idempotentes)
@@ -726,16 +934,339 @@ alter table public.matches
 create index if not exists idx_matches_court on public.matches (court_id);
 
 -- ──────────────────────────────────────────────────────────────
--- 15) WEBHOOKS DEL DASHBOARD (configurar en Database → Webhooks)
---    La edge function `notify` recibe evento por evento. Configurar:
---      · challenges              INSERT              → /functions/v1/notify
---      · tournaments             INSERT, UPDATE      → /functions/v1/notify
---      · tournament_registrations INSERT, UPDATE     → /functions/v1/notify
---      · matches                 UPDATE              → /functions/v1/notify
---                                  (push "partido programado" a ambos jugadores)
---      · messages                INSERT              → /functions/v1/notify
---    Todas con header  Authorization: Bearer NOTIFY_SECRET
---    (el mismo valor que la variable NOTIFY_SECRET de la edge function).
+-- 14c) NOTIFICACIONES EN VIVO (chat, desafíos, torneos, partidos)
+--   Reemplaza los webhooks manuales del dashboard: triggers de la
+--   base (pg_net) llaman directo a la edge function `notify`.
+--   El NOTIFY_SECRET se guarda en `app_config` (nunca en git):
+--   cargarlo una sola vez desde el SQL Editor:
+--     update public.app_config set value = 'TU_NOTIFY_SECRET'
+--     where key = 'notify_secret';
+-- ──────────────────────────────────────────────────────────────
+create extension if not exists pg_net;
+
+create table if not exists public.app_config (
+    key   text primary key,
+    value text not null
+);
+
+alter table public.app_config enable row level security;
+
+insert into public.app_config (key, value) values
+    ('notify_url', 'https://qodajlsxihukgfdvntjy.supabase.co/functions/v1/notify'),
+    -- placeholder vacío: el trigger no envía nada hasta cargar el secret real
+    ('notify_secret', '')
+on conflict (key) do nothing;
+
+create or replace function public.send_push_direct(
+    p_user_id uuid,
+    p_type text,
+    p_title text,
+    p_body text,
+    p_data jsonb,
+    p_related_id uuid default null
+)
+returns void
+language plpgsql
+security definer set search_path = public, extensions
+as $$
+declare
+    v_token text;
+begin
+    insert into public.notifications (user_id, type, title, body, data, related_id)
+    values (p_user_id, p_type, p_title, p_body, coalesce(p_data, '{}'::jsonb), p_related_id);
+
+    select expo_push_token into v_token
+    from public.profiles
+    where id = p_user_id;
+
+    if v_token is null or v_token not like 'ExponentPushToken%' then
+        return;
+    end if;
+
+    begin
+        perform net.http_post(
+            'https://api.expo.dev/v2/push/send',
+            jsonb_build_array(jsonb_build_object(
+                'to', v_token,
+                'title', p_title,
+                'body', p_body,
+                'data', coalesce(p_data, '{}'::jsonb),
+                'sound', 'default',
+                'badge', 1,
+                'priority', 'high',
+                'channelId', 'default'
+            )),
+            '{}'::jsonb,
+            jsonb_build_object(
+                'Content-Type', 'application/json',
+                'Accept', 'application/json'
+            ),
+            5000
+        );
+    exception when others then
+        raise warning 'send_push_direct failed: %', sqlerrm;
+    end;
+end;
+$$;
+
+revoke all on function public.send_push_direct(uuid, text, text, text, jsonb, uuid) from public;
+revoke all on function public.send_push_direct(uuid, text, text, text, jsonb, uuid) from anon;
+revoke all on function public.send_push_direct(uuid, text, text, text, jsonb, uuid) from authenticated;
+
+create or replace function public.call_notify_webhook()
+returns trigger
+language plpgsql
+security definer set search_path = public, extensions
+as $$
+declare
+    v_rec jsonb;
+    v_old jsonb;
+    v_id uuid;
+    v_user uuid;
+    v_title text;
+    v_body text;
+    v_content text;
+    v_when text;
+    v_data jsonb;
+    v_avatar text;
+    v_tournament_name text;
+    v_row record;
+begin
+    if TG_OP = 'DELETE' then
+        v_rec := to_jsonb(old);
+        v_old := '{}'::jsonb;
+    else
+        v_rec := to_jsonb(new);
+        if TG_OP = 'UPDATE' then
+            v_old := to_jsonb(old);
+        else
+            v_old := '{}'::jsonb;
+        end if;
+    end if;
+
+    if TG_TABLE_NAME = 'messages' and TG_OP = 'INSERT' then
+        v_id := (v_rec->>'conversation_id')::uuid;
+
+        select case
+                   when participant1_id = (v_rec->>'sender_id')::uuid then participant2_id
+                   else participant1_id
+               end
+        into v_user
+        from public.conversations
+        where id = v_id
+          and (participant1_id = (v_rec->>'sender_id')::uuid
+            or participant2_id = (v_rec->>'sender_id')::uuid);
+
+        if v_user is not null then
+            select coalesce(nullif(full_name, ''), 'Nuevo mensaje'), avatar_url
+            into v_title, v_avatar
+            from public.profiles
+            where id = (v_rec->>'sender_id')::uuid;
+
+            v_content := coalesce(nullif(v_rec->>'content', ''), 'Nuevo mensaje');
+            v_body := case
+                when length(v_content) > 60 then left(v_content, 60) || '...'
+                else v_content
+            end;
+            v_data := jsonb_build_object(
+                'type', 'message',
+                'conversation_id', v_id,
+                'avatar_url', v_avatar
+            );
+
+            perform public.send_push_direct(
+                v_user,
+                'message',
+                coalesce(v_title, 'Nuevo mensaje'),
+                v_body,
+                v_data,
+                v_id
+            );
+        end if;
+
+    elsif TG_TABLE_NAME = 'challenges' and TG_OP = 'INSERT' then
+        v_id := (v_rec->>'id')::uuid;
+
+        select coalesce(nullif(full_name, ''), 'Alguien'), avatar_url
+        into v_title, v_avatar
+        from public.profiles
+        where id = (v_rec->>'challenger_id')::uuid;
+
+        v_title := coalesce(v_title, 'Alguien');
+        v_body := v_title || ' te desafió a un partido';
+        v_data := jsonb_build_object(
+            'type', 'challenge',
+            'challenge_id', v_id,
+            'avatar_url', v_avatar
+        );
+
+        perform public.send_push_direct(
+            (v_rec->>'challenged_id')::uuid,
+            'challenge',
+            'Nuevo desafío',
+            v_body,
+            v_data,
+            v_id
+        );
+
+    elsif TG_TABLE_NAME = 'tournaments' and TG_OP = 'INSERT' then
+        v_id := (v_rec->>'id')::uuid;
+        v_data := jsonb_build_object('type', 'tournament_new', 'tournament_id', v_id);
+
+        for v_row in select id from public.profiles where role = 'athlete' loop
+            perform public.send_push_direct(
+                v_row.id,
+                'tournament_new',
+                'Nuevo torneo disponible',
+                'Se abrió la inscripción: ' || coalesce(v_rec->>'name', ''),
+                v_data,
+                v_id
+            );
+        end loop;
+
+    elsif TG_TABLE_NAME = 'tournaments' and TG_OP = 'UPDATE' then
+        v_id := (v_rec->>'id')::uuid;
+
+        if v_rec->>'status' = 'in_progress'
+           and v_old->>'status' is distinct from 'in_progress' then
+            v_data := jsonb_build_object('type', 'tournament_start', 'tournament_id', v_id);
+
+            for v_row in select id from public.profiles where role = 'athlete' loop
+                perform public.send_push_direct(
+                    v_row.id,
+                    'tournament_start',
+                    'Torneo iniciado',
+                    'Comenzó el torneo: ' || coalesce(v_rec->>'name', ''),
+                    v_data,
+                    v_id
+                );
+            end loop;
+
+        elsif v_rec->>'status' is distinct from v_old->>'status'
+              and v_rec->>'status' in ('closed', 'open') then
+            v_title := case
+                when v_rec->>'status' = 'closed' then 'Lista cerrada'
+                else 'Lista reabierta'
+            end;
+            v_body := case
+                when v_rec->>'status' = 'closed'
+                    then 'Se cerró la lista de inscripción para '
+                else 'Se reabrió la lista de inscripción para '
+            end || coalesce(v_rec->>'name', '');
+            v_data := jsonb_build_object('type', 'tournament_update', 'tournament_id', v_id);
+
+            for v_row in
+                select player_id
+                from public.tournament_registrations
+                where tournament_id = v_id
+            loop
+                perform public.send_push_direct(
+                    v_row.player_id,
+                    'tournament_update',
+                    v_title,
+                    v_body,
+                    v_data,
+                    v_id
+                );
+            end loop;
+        end if;
+
+    elsif TG_TABLE_NAME = 'tournament_registrations' and TG_OP = 'INSERT' then
+        v_id := (v_rec->>'tournament_id')::uuid;
+
+        select t.organizer_id, coalesce(nullif(p.full_name, ''), 'Alguien'), t.name
+        into v_user, v_title, v_tournament_name
+        from public.tournaments t
+        join public.profiles p on p.id = (v_rec->>'player_id')::uuid
+        where t.id = v_id;
+
+        if v_user is not null then
+            v_data := jsonb_build_object('type', 'tournament_registration', 'tournament_id', v_id);
+            perform public.send_push_direct(
+                v_user,
+                'tournament_registration',
+                'Nueva inscripción',
+                v_title || ' se inscribió en ' || coalesce(v_tournament_name, ''),
+                v_data,
+                v_id
+            );
+        end if;
+
+    elsif TG_TABLE_NAME = 'matches' and TG_OP = 'UPDATE'
+          and v_rec->>'scheduled_at' is not null
+          and v_rec->>'scheduled_at' is distinct from v_old->>'scheduled_at' then
+        v_id := (v_rec->>'id')::uuid;
+        v_when := to_char(
+            ((v_rec->>'scheduled_at')::timestamptz at time zone 'America/Argentina/Tucuman'),
+            'DD/MM HH24:MI'
+        );
+        v_body := 'Tu partido se juega el ' || v_when
+            || case
+                   when nullif(v_rec->>'location', '') is not null
+                       then ' en ' || (v_rec->>'location')
+                   else ''
+               end;
+        v_data := jsonb_build_object('type', 'match_scheduled', 'match_id', v_id);
+
+        for v_user in
+            select x
+            from unnest(array[
+                (v_rec->>'player1_id')::uuid,
+                (v_rec->>'player2_id')::uuid
+            ]) as x
+            where x is not null
+        loop
+            perform public.send_push_direct(
+                v_user,
+                'match_scheduled',
+                'Partido programado',
+                v_body,
+                v_data,
+                v_id
+            );
+        end loop;
+    end if;
+
+    if TG_OP = 'DELETE' then
+        return old;
+    end if;
+    return new;
+end;
+$$;
+
+-- Desafío recibido
+drop trigger if exists trg_notify_challenge_created on public.challenges;
+create trigger trg_notify_challenge_created
+    after insert on public.challenges
+    for each row execute function public.call_notify_webhook();
+
+-- Torneo nuevo / iniciado / lista cerrada-reabierta
+drop trigger if exists trg_notify_tournament_changes on public.tournaments;
+create trigger trg_notify_tournament_changes
+    after insert or update on public.tournaments
+    for each row execute function public.call_notify_webhook();
+
+-- Nueva inscripción (aviso al organizador)
+drop trigger if exists trg_notify_registration_changes on public.tournament_registrations;
+create trigger trg_notify_registration_changes
+    after insert or update on public.tournament_registrations
+    for each row execute function public.call_notify_webhook();
+
+-- Partido programado (aviso a ambos jugadores)
+drop trigger if exists trg_notify_match_changes on public.matches;
+create trigger trg_notify_match_changes
+    after update on public.matches
+    for each row execute function public.call_notify_webhook();
+
+-- Mensaje nuevo (notificación de chat)
+drop trigger if exists trg_notify_message_sent on public.messages;
+create trigger trg_notify_message_sent
+    after insert on public.messages
+    for each row execute function public.call_notify_webhook();
+
+-- ──────────────────────────────────────────────────────────────
+-- 15) EDGE FUNCTION `notify` (ya NO requiere webhooks del dashboard:
+--     la llaman los triggers de la sección 14c vía pg_net)
 -- ──────────────────────────────────────────────────────────────
 -- 16) REALTIME: habilitar broadcast en tablas que la app escucha
 --     (se puede verificar/marcar también en Dashboard → Database → Replication)
@@ -751,7 +1282,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['profiles', 'messages', 'conversations', 'notifications']
+  foreach t in array array['profiles', 'messages', 'conversations', 'notifications', 'beta_feedback', 'matches']
   loop
     if not exists (
       select 1 from pg_publication_tables

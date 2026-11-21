@@ -5,6 +5,9 @@ import { createClient } from '@supabase/supabase-js'
 
 const EXPO_PUSH_URL = 'https://api.expo.dev/v2/push/send'
 
+const getEnv = (name: string): string | undefined =>
+  (globalThis as any).Deno?.env?.get?.(name) ?? (globalThis as any).process?.env?.[name]
+
 interface PushPayload {
   user_id: string
   title: string
@@ -20,18 +23,29 @@ async function handler(req: Request) {
   }
 
   // Verificar secret para que solo Supabase pueda llamar esta función
+  const notifySecret = getEnv('NOTIFY_SECRET')
+  const supabaseUrl = getEnv('SUPABASE_URL')
+  const serviceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY') ?? getEnv('SUPABASE_SECRET_KEY')
+
+  if (!notifySecret || !supabaseUrl || !serviceRoleKey) {
+    console.error('[notify] missing environment configuration')
+    return new Response('Server misconfigured', { status: 500 })
+  }
+
   const authHeader = req.headers.get('Authorization')
-  if (authHeader !== `Bearer ${process.env.NOTIFY_SECRET}`) {
+  if (authHeader !== `Bearer ${notifySecret}`) {
     return new Response('Unauthorized', { status: 401 })
   }
 
-  const payload = await req.json()
+  let payload: any
+  try {
+    payload = await req.json()
+  } catch {
+    return new Response('Bad Request', { status: 400 })
+  }
   const { type, table, record, old_record } = payload
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const supabase = createClient(supabaseUrl, serviceRoleKey)
 
   const notifications: PushPayload[] = []
 
@@ -39,7 +53,7 @@ async function handler(req: Request) {
   if (table === 'challenges' && type === 'INSERT') {
     const { data: challenger } = await supabase
       .from('profiles')
-      .select('full_name')
+      .select('full_name, avatar_url')
       .eq('id', record.challenger_id)
       .single()
 
@@ -47,7 +61,11 @@ async function handler(req: Request) {
       user_id: record.challenged_id,
       title: 'Nuevo desafío',
       body: `${challenger?.full_name ?? 'Alguien'} te desafió a un partido`,
-      data: { type: 'challenge', challenge_id: record.id },
+      data: {
+        type: 'challenge',
+        challenge_id: record.id,
+        avatar_url: challenger?.avatar_url ?? null,
+      },
       type: 'challenge',
     })
   }
@@ -190,31 +208,49 @@ async function handler(req: Request) {
 
       const { data: sender } = await supabase
         .from('profiles')
-        .select('full_name')
+        .select('full_name, avatar_url')
         .eq('id', record.sender_id)
         .single()
 
+      const content = String(record.content ?? 'Nuevo mensaje')
       const preview =
-        record.content.length > 60
-          ? record.content.substring(0, 60) + '...'
-          : record.content
+        content.length > 60
+          ? content.substring(0, 60) + '...'
+          : content
 
       notifications.push({
         user_id: recipient_id,
         title: sender?.full_name ?? 'Nuevo mensaje',
         body: preview,
-        data: { type: 'message', conversation_id: record.conversation_id },
+        data: {
+          type: 'message',
+          conversation_id: record.conversation_id,
+          avatar_url: sender?.avatar_url ?? null,
+        },
         type: 'message',
       })
     }
   }
 
   // ── ENVIAR ──────────────────────────────────────────────────────────────────
-  const expoPushMessages: object[] = []
+  // channelId + priority son obligatorios en Android 8+ para que la
+  // notificación aparezca como heads-up (y no quede silenciada en un canal
+  // secundario). Sin channelId, Expo usa un canal por defecto que puede tener
+  // importancia baja.
+  const expoPushMessages: {
+    to: string
+    title: string
+    body: string
+    data: Record<string, unknown>
+    sound: string
+    badge: number
+    priority: 'high'
+    channelId: string
+  }[] = []
 
   for (const notif of notifications) {
     // Guardar en notifications table
-    await supabase.from('notifications').insert({
+    const { error: insertError } = await supabase.from('notifications').insert({
       user_id: notif.user_id,
       type: notif.type,
       title: notif.title,
@@ -225,6 +261,9 @@ async function handler(req: Request) {
         notif.data.match_id) as string | null,
       data: notif.data,
     })
+    if (insertError) {
+      console.error('[notify] notification insert failed', insertError)
+    }
 
     // Buscar token
     const { data: profile } = await supabase
@@ -241,11 +280,15 @@ async function handler(req: Request) {
         data: notif.data,
         sound: 'default',
         badge: 1,
+        priority: 'high',
+        channelId: 'default',
       })
     }
   }
 
   // Enviar a Expo en lotes de máx 100 por request.
+  const tokensToClear: string[] = []
+
   for (let i = 0; i < expoPushMessages.length; i += 100) {
     const chunk = expoPushMessages.slice(i, i + 100)
     try {
@@ -257,12 +300,43 @@ async function handler(req: Request) {
         },
         body: JSON.stringify(chunk),
       })
+
       if (!res.ok) {
         console.error('[notify] Expo push error', res.status, await res.text())
+        continue
       }
+
+      // Expo responde 200 incluso cuando el envío falla: el error viene en
+      // cada ticket. Antes se ignoraba y el push se perdía en silencio.
+      const json = await res.json().catch(() => null)
+      const tickets = Array.isArray(json?.data) ? json.data : []
+
+      tickets.forEach((ticket: any, index: number) => {
+        if (ticket?.status !== 'error') return
+
+        const token = chunk[index]?.to
+        console.error(
+          '[notify] Expo ticket error',
+          token,
+          ticket.message,
+          ticket.details ?? '',
+        )
+
+        // Token inválido/desinstalado: limpiarlo para no reintentar siempre.
+        if (ticket?.details?.error === 'DeviceNotRegistered' && token) {
+          tokensToClear.push(token)
+        }
+      })
     } catch (err) {
       console.error('[notify] Expo push fetch failed', err)
     }
+  }
+
+  if (tokensToClear.length > 0) {
+    await supabase
+      .from('profiles')
+      .update({ expo_push_token: null })
+      .in('expo_push_token', tokensToClear)
   }
 
   return new Response(JSON.stringify({ sent: notifications.length }), {

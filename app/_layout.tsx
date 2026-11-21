@@ -55,6 +55,10 @@ export default function RootLayout() {
         if (!initialized) return;
 
         const seg0 = segments[0] as string | undefined;
+
+        // El link del mail de recuperación crea la sesión en esta pantalla: no redirigir
+        if (seg0 === "reset-password") return;
+
         const inAuthScreens =
             seg0 === "login" ||
             seg0 === "register" ||
@@ -68,7 +72,7 @@ export default function RootLayout() {
         if (session && inAuthScreens) {
             router.replace("/");
         }
-    }, [session, initialized]);
+    }, [session, initialized, segments, router]);
 
     if (!initialized || !fontsLoaded) {
         return (

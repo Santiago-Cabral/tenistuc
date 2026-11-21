@@ -46,7 +46,9 @@ export function useNotificationTimeline({
 
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const current = useRef<IDynamicNotification | null>(null);
-    const queued = useRef<IDynamicNotification | null>(null);
+    // Cola real: si llegan varias mientras se muestra una, se muestran todas
+    // (una por una) en lugar de pisarse y perderse.
+    const queued = useRef<IDynamicNotification[]>([]);
     const exiting = useRef(false);
     const exitRef = useRef<() => void>(() => {});
     const dismissHandler = useRef(onDismiss);
@@ -101,10 +103,9 @@ export function useNotificationTimeline({
 
     const settle = useCallback(() => {
         const dismissed = current.current;
-        const next = queued.current;
+        const next = queued.current.shift() ?? null;
 
         current.current = null;
-        queued.current = null;
         exiting.current = false;
         setIsVisible(false);
 
@@ -146,7 +147,7 @@ export function useNotificationTimeline({
     const trigger = useCallback(
         (next: IDynamicNotification) => {
             if (current.current) {
-                queued.current = next;
+                queued.current.push(next);
                 exit();
                 return;
             }
@@ -157,7 +158,8 @@ export function useNotificationTimeline({
     );
 
     const dismiss = useCallback(() => {
-        queued.current = null;
+        // Descarte manual: tira también lo que quedó encolado.
+        queued.current = [];
         exit();
     }, [exit]);
 

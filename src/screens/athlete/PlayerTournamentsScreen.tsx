@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity,
-    StyleSheet, RefreshControl, ActivityIndicator,
+    StyleSheet, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { Colors, Spacing, Typography, Radius, Shadow } from '../../theme';
-import { Card, Badge } from '../../components/ui';
+import { Card, Badge, SkeletonList } from '../../components/ui';
 
 interface TournamentRow {
     id: string;
@@ -217,9 +217,7 @@ export default function PlayerTournamentsScreen() {
             </View>
 
             {loading ? (
-                <View style={styles.loader}>
-                    <ActivityIndicator color={Colors.primary} size="large" />
-                </View>
+                <SkeletonList count={4} />
             ) : (
                 <FlatList
                     data={data}

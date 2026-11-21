@@ -468,7 +468,7 @@ export default function HomeScreen() {
                             </View>
                             <View style={styles.eloStat}>
                                 <Text style={styles.eloStatLabel}>Nivel</Text>
-                                <Text style={styles.eloStatValue}>{profile?.level ?? 'Amateur I'}</Text>
+                                <Text style={styles.eloStatValue}>{profile?.level ?? '6ta'}</Text>
                             </View>
                         </View>
                     </LinearGradient>

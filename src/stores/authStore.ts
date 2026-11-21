@@ -4,12 +4,13 @@ import { supabase } from '../lib/supabase';
 import { presenceService } from '../services/presenceService';
 import { clearPushToken } from '../notifications/notificationService';
 import type { Level } from '../constants/levels';
+import type { AgeCategory } from '../constants/ageCategories';
 
 // Columnas legibles de `profiles`. Se listan explícitamente y se excluye
 // `expo_push_token`: esa columna está revocada para anon/authenticated
 // (el token push solo lo lee el servidor con service_role).
 const PROFILE_COLUMNS =
-    'id, username, full_name, avatar_url, role, city, club, elo, level, wins, losses, play_style, bio, is_online, last_seen, privacy_consented_at, privacy_policy_version, created_at';
+    'id, username, full_name, avatar_url, role, city, club, elo, level, age_category, gender, wins, losses, play_style, bio, is_online, last_seen, privacy_consented_at, privacy_policy_version, created_at';
 
 export interface Profile {
     id: string;
@@ -22,6 +23,8 @@ export interface Profile {
     elo: number;
     globalRank: number;
     level: Level;
+    age_category: AgeCategory;
+    gender: 'femenino' | 'masculino' | 'otro' | null;
     wins: number;
     losses: number;
     play_style: string[] | null;
@@ -46,6 +49,7 @@ interface AuthState {
         username: string,
         fullName: string,
         level?: Level,
+        ageCategory?: AgeCategory,
         role?: 'athlete' | 'organizer'
     ) => Promise<void>;
     signOut: () => Promise<void>;
@@ -109,12 +113,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (error) throw error;
     },
 
-    signUp: async (email, password, username, fullName, level, role = 'athlete') => {
+    signUp: async (email, password, username, fullName, level, ageCategory = 'libre', role = 'athlete') => {
         const { error } = await supabase.auth.signUp({
             email,
             password,
             options: {
-                data: { username, full_name: fullName, role, level },
+                data: { username, full_name: fullName, role, level, age_category: ageCategory },
             },
         });
         if (error) throw error;

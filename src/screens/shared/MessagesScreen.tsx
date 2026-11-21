@@ -2,13 +2,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, StyleSheet,
-    ActivityIndicator, RefreshControl,
+    RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius } from '../../theme/index';
 import { Avatar } from '../../components/ui/Avatar';
+import { SkeletonList } from '../../components/ui/Skeleton';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { isActuallyOnline } from '../../services/presenceService';
@@ -129,9 +130,7 @@ export default function MessagesScreen() {
             </View>
 
             {loading ? (
-                <View style={styles.loaderContainer}>
-                    <ActivityIndicator color={Colors.primary} size="large" />
-                </View>
+                <SkeletonList count={6} variant="row" />
             ) : (
                 <FlatList
                     data={conversations}

@@ -44,7 +44,7 @@ begin
                     ''
                 ),
                 coalesce(new.raw_user_meta_data ->> 'role', 'athlete'),
-                coalesce(new.raw_user_meta_data ->> 'level', 'Amateur I')
+                coalesce(new.raw_user_meta_data ->> 'level', '6ta')
             )
             on conflict (id) do nothing;
             return new;

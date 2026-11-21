@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity,
-    StyleSheet, ActivityIndicator,
+    StyleSheet,
     Alert,
 } from 'react-native';
 import { showAlert } from '../../../src/services/appAlert';
@@ -11,9 +11,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius } from '../../theme';
-import { Avatar, Badge, Button, Card, SectionHeader } from '../../components/ui';
+import { Avatar, Badge, Button, Card, SectionHeader, SkeletonList } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { ageCategoryLabel } from '../../constants/ageCategories';
 import { matchesService } from '../../services/matchService';
 import { isActuallyOnline } from '../../services/presenceService';
 import CreateChallengeModal from '../../components/challenges/CreateChallengeModal';
@@ -51,7 +52,7 @@ export default function ProfileDetailScreen() {
         setLoadError(null);
         supabase
             .from('profiles')
-            .select('id, username, full_name, avatar_url, role, city, club, elo, level, wins, losses, play_style, bio, is_online, last_seen, created_at')
+            .select('id, username, full_name, avatar_url, role, city, club, elo, level, age_category, wins, losses, play_style, bio, is_online, last_seen, created_at')
             .eq('id', id)
             .single()
             .then(({ data, error }) => {
@@ -126,8 +127,8 @@ export default function ProfileDetailScreen() {
     };
 
     if (loading) return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color={Colors.primary} size="large" />
+        <SafeAreaView style={{ flex: 1, backgroundColor: Colors.surface }} edges={['top']}>
+            <SkeletonList count={5} />
         </SafeAreaView>
     );
 
@@ -196,10 +197,17 @@ export default function ProfileDetailScreen() {
                     </View>
                     <View style={styles.levelWrap}>
                         <Badge
-                            label={player.level ?? 'Amateur I'}
+                            label={player.level ?? '6ta'}
                             color="rgba(183,228,199,0.25)"
                             textColor={Colors.primaryContainer}
                         />
+                        {ageCategoryLabel(player.age_category) && (
+                            <Badge
+                                label={ageCategoryLabel(player.age_category)!}
+                                color="rgba(255,255,255,0.18)"
+                                textColor={Colors.onPrimary}
+                            />
+                        )}
                     </View>
                 </LinearGradient>
 
@@ -353,7 +361,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#4ade80',
     },
     statusText: { ...Typography.labelSm, color: 'rgba(183,228,199,0.75)' },
-    levelWrap: { marginTop: Spacing.sm },
+    levelWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: Spacing.sm,
+        marginTop: Spacing.sm,
+    },
     content: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl, gap: Spacing.lg },
     eloCard: {},
     eloRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

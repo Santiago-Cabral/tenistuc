@@ -53,7 +53,7 @@ export const ENTER_EXPAND_DELAY = 340;
 export const ENTER_REVEAL_DELAY = 560;
 export const EXIT_COLLAPSE_DELAY = 100;
 export const EXIT_DROP_DELAY = 280;
-export const AUTO_DISMISS = 3600;
+export const AUTO_DISMISS = 5000;
 
 // ── Gesto de descarte ────────────────────────────────────────────────────────
 export const SWIPE_DISTANCE = -18;

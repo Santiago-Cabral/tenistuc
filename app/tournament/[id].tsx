@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-    View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
+    View, Text, ScrollView, TouchableOpacity, StyleSheet,
+    RefreshControl,
 } from 'react-native';
 import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../src/theme/index';
 import { Badge, Avatar, Button, Card, SectionHeader } from '../../src/components/ui';
+import AthleteFixtureSection from '../../src/components/tournament/AthleteFixtureSection';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthStore } from '../../src/stores/authStore';
 
@@ -21,6 +23,9 @@ export default function TournamentDetailScreen() {
     const [registrations, setRegistrations] = useState<any[]>([]);
     const [myRegistration, setMyRegistration] = useState<any>(null);
     const [joining, setJoining] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const [fixtureKey, setFixtureKey] = useState(0);
+    const [showAllParticipants, setShowAllParticipants] = useState(false);
 
     const refreshMyRegistration = async () => {
         if (!profile || !id) return;
@@ -33,25 +38,46 @@ export default function TournamentDetailScreen() {
         setMyRegistration(data ?? null);
     };
 
-    useEffect(() => {
+    const loadAll = useCallback(async () => {
         if (!id) return;
-        supabase.from('tournaments').select('*, organizer:profiles!tournaments_organizer_id_fkey(full_name, avatar_url)')
-            .eq('id', id).single()
-            .then(({ data }) => { if (data) setTournament(data); });
+        const [tRes, regRes] = await Promise.all([
+            supabase
+                .from('tournaments')
+                .select('*, organizer:profiles!tournaments_organizer_id_fkey(full_name, avatar_url)')
+                .eq('id', id)
+                .single(),
+            supabase
+                .from('tournament_registrations')
+                // el id del jugador tiene que venir en el select embebido:
+                // se usa para navegar a su perfil al tocarlo
+                .select('*, player:profiles(id, full_name, avatar_url, elo, level)')
+                .eq('tournament_id', id)
+                .order('registered_at', { ascending: false }),
+        ]);
 
-        supabase.from('tournament_registrations')
-            .select('*, player:profiles(full_name, avatar_url, elo, level)')
-            .eq('tournament_id', id)
-            .order('registered_at', { ascending: false })
-            .then(({ data }) => { if (data) setRegistrations(data); });
+        if (tRes.data) setTournament(tRes.data);
+        if (regRes.data) setRegistrations(regRes.data);
 
-        refreshMyRegistration();
+        await refreshMyRegistration();
     }, [id, profile]);
+
+    useEffect(() => { loadAll(); }, [loadAll]);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        setFixtureKey(k => k + 1);
+        await loadAll();
+        setRefreshing(false);
+    };
 
     const handleJoin = async () => {
         if (!profile || !tournament) return;
         if (tournament.status !== 'open') {
             showAlert('Lista cerrada', 'La inscripción para este torneo está cerrada.');
+            return;
+        }
+        if (!eligible) {
+            showAlert('No podés inscribirte', `Este torneo es ${notEligibleReason}.`);
             return;
         }
         setJoining(true);
@@ -63,7 +89,9 @@ export default function TournamentDetailScreen() {
                     payment_status: 'pending',
                 });
             if (error) throw error;
-            await refreshMyRegistration();
+            // recarga inscriptos + mi estado (para verme en la lista y el estado
+            // de "habilitado" apenas el organizador acepte)
+            await loadAll();
             showAlert(
                 '¡Inscripto!',
                 `Quedaste anotado en ${tournament.name}. El organizador tiene que habilitar tu lugar.`,
@@ -98,9 +126,30 @@ export default function TournamentDetailScreen() {
         );
     }
 
+    // Torneo exclusivo: ¿el jugador cumple los requisitos para inscribirse?
+    const genderRestricted = tournament.allowed_gender === 'femenino' || tournament.allowed_gender === 'masculino';
+    const levelRestricted = !!tournament.allowed_level && tournament.allowed_level !== 'todas';
+    const eligible = (!genderRestricted || profile?.gender === tournament.allowed_gender)
+        && (!levelRestricted || profile?.level === tournament.allowed_level);
+
+    const restrictionParts: string[] = [];
+    if (genderRestricted && profile?.gender !== tournament.allowed_gender) {
+        restrictionParts.push(tournament.allowed_gender === 'femenino' ? 'solo para mujeres' : 'solo para hombres');
+    }
+    if (levelRestricted && profile?.level !== tournament.allowed_level) {
+        restrictionParts.push(`solo para la categoría ${tournament.allowed_level}`);
+    }
+    const notEligibleReason = restrictionParts.join(' y ');
+    const genderMissing = genderRestricted && profile?.gender == null;
+
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                refreshControl={(
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+                )}
+            >
                 {/* Hero */}
                 <View style={styles.hero}>
                     <Image
@@ -124,6 +173,22 @@ export default function TournamentDetailScreen() {
                         <Text style={styles.heroTitle}>{tournament.name}</Text>
                         {tournament.category && (
                             <Text style={styles.heroCategory}>{tournament.category}</Text>
+                        )}
+                        {(genderRestricted || levelRestricted) && (
+                            <View style={styles.heroChips}>
+                                {genderRestricted && (
+                                    <View style={styles.heroChip}>
+                                        <Text style={styles.heroChipText}>
+                                            {tournament.allowed_gender === 'femenino' ? 'SOLO MUJERES' : 'SOLO HOMBRES'}
+                                        </Text>
+                                    </View>
+                                )}
+                                {levelRestricted && (
+                                    <View style={styles.heroChip}>
+                                        <Text style={styles.heroChipText}>SOLO {tournament.allowed_level.toUpperCase()}</Text>
+                                    </View>
+                                )}
+                            </View>
                         )}
                     </View>
                 </View>
@@ -218,13 +283,22 @@ export default function TournamentDetailScreen() {
                         </Card>
                     )}
 
+                    {/* Fixture: visible para jugadores habilitados (pago aceptado) */}
+                    {myRegistration?.payment_status === 'paid' && (
+                        <AthleteFixtureSection
+                            tournamentId={tournament.id}
+                            myPlayerId={profile?.id}
+                            reloadKey={fixtureKey}
+                        />
+                    )}
+
                     {/* Participants */}
                     <SectionHeader title={`Participantes (${registrations.length})`} />
-                    {registrations.slice(0, 8).map((r, i) => (
+                    {(showAllParticipants ? registrations : registrations.slice(0, 8)).map((r, i) => (
                         <TouchableOpacity
                             key={r.id}
                             style={styles.participantRow}
-                            onPress={() => router.push(`/profile/${r.player?.id}`)}
+                            onPress={() => r.player?.id && router.push(`/profile/${r.player.id}`)}
                             activeOpacity={0.8}
                         >
                             <Text style={styles.participantRank}>{i + 1}</Text>
@@ -242,9 +316,14 @@ export default function TournamentDetailScreen() {
                         </TouchableOpacity>
                     ))}
                     {registrations.length > 8 && (
-                        <TouchableOpacity style={styles.moreBtn}>
+                        <TouchableOpacity
+                            style={styles.moreBtn}
+                            onPress={() => setShowAllParticipants(v => !v)}
+                        >
                             <Text style={styles.moreBtnText}>
-                                Ver todos los {registrations.length} participantes
+                                {showAllParticipants
+                                    ? 'Ver menos'
+                                    : `Ver todos los ${registrations.length} participantes`}
                             </Text>
                         </TouchableOpacity>
                     )}
@@ -290,23 +369,40 @@ export default function TournamentDetailScreen() {
                                         </Text>
                                         <Text style={styles.registeredSub}>
                                             {myRegistration.payment_status === 'paid'
-                                                ? 'El organizador confirmó tu lugar. Te avisaremos cuando comiencen los partidos.'
+                                                ? 'El organizador confirmó tu lugar. Seguí el fixture y tus horarios en esta pantalla.'
                                                 : 'El organizador tiene que habilitar tu lugar.'}
                                         </Text>
                                     </View>
                                 </Card>
                             ) : tournament.status === 'open' ? (
-                                <>
-                                    <Text style={styles.ctaNote}>
-                                        Quedan {Math.max((tournament.max_players ?? 0) - registrations.length, 0)} lugares disponibles
-                                    </Text>
-                                    <Button
-                                        label="INSCRIBIRSE"
-                                        onPress={handleJoin}
-                                        loading={joining}
-                                        uppercase={false}
-                                    />
-                                </>
+                                !eligible ? (
+                                    <Card style={styles.registeredCard}>
+                                        <View style={[styles.registeredIconWrap, { backgroundColor: `${Colors.error}14` }]}>
+                                            <Ionicons name="lock-closed" size={28} color={Colors.error} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.registeredTitle, { color: Colors.error }]}>
+                                                No disponible para vos
+                                            </Text>
+                                            <Text style={styles.registeredSub}>
+                                                {`Este torneo es ${notEligibleReason}.`}
+                                                {genderMissing ? ' Configurá tu género en tu perfil para poder inscribirte.' : ''}
+                                            </Text>
+                                        </View>
+                                    </Card>
+                                ) : (
+                                    <>
+                                        <Text style={styles.ctaNote}>
+                                            Quedan {Math.max((tournament.max_players ?? 0) - registrations.length, 0)} lugares disponibles
+                                        </Text>
+                                        <Button
+                                            label="INSCRIBIRSE"
+                                            onPress={handleJoin}
+                                            loading={joining}
+                                            uppercase={false}
+                                        />
+                                    </>
+                                )
                             ) : null}
                         </View>
                     ) : null}
@@ -334,6 +430,17 @@ const styles = StyleSheet.create({
         letterSpacing: -1, lineHeight: 36,
     },
     heroCategory: { ...Typography.bodyMd, color: 'rgba(255,255,255,0.75)' },
+    heroChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+    heroChip: {
+        paddingHorizontal: 8, paddingVertical: 3,
+        borderRadius: Radius.full,
+        backgroundColor: 'rgba(255,255,255,0.18)',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+    },
+    heroChipText: {
+        fontFamily: 'PlusJakartaSans_700Bold', fontSize: 10,
+        color: '#fff', letterSpacing: 0.5,
+    },
     content: { paddingHorizontal: Spacing.xl, gap: Spacing.xl, paddingTop: Spacing.xl },
     statsRow: {
         flexDirection: 'row',

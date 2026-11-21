@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { AppState } from 'react-native'
 import { useAuthStore } from '../stores/authStore'
 import { isPushAvailable, registerForPushNotifications, savePushToken } from '../notifications/notificationService'
 import { navigateToNotification } from '../notifications/notificationNavigation'
@@ -24,9 +25,23 @@ export function useNotifications() {
 
     let mounted = true
 
+    const register = () => {
+      registerForPushNotifications().then(async (token) => {
+        if (!token || !mounted) return
+        const saved = await savePushToken(userId, token)
+        if (!saved) {
+          console.warn('[Notifications] El token se obtuvo pero no se pudo guardar.')
+        }
+      })
+    }
+
     // Registrar token
-    registerForPushNotifications().then((token) => {
-      if (token && mounted) savePushToken(userId, token)
+    register()
+
+    // Al volver a primer plano reintentamos: el primer intento puede fallar
+    // si FCM todavía no está listo (típico en Android al abrir la app).
+    const appStateSub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') register()
     })
 
     // Listeners solo si expo-notifications está disponible en este entorno
@@ -47,6 +62,7 @@ export function useNotifications() {
 
     return () => {
       mounted = false
+      appStateSub.remove()
       notifListener.current?.remove()
       responseListener.current?.remove()
     }

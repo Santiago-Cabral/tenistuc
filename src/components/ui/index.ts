@@ -7,4 +7,6 @@ export { EloIndicator } from './EloIndicator';
 export { InputField } from './InputField';
 export { Chip } from './Chip';
 export { Text } from './Text';
-export { PrivacyConsent } from './PrivacyConsent';
+export { PrivacyConsent } from './PrivacyConsent';
+export { Skeleton, SkeletonList } from './Skeleton';
+export { AgeCategoryField } from './AgeCategoryField';

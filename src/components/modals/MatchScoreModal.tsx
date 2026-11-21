@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import { submitMatchScore, SetScore } from '../../services/fixtureService';
 
@@ -51,6 +52,7 @@ export default function MatchScoreModal({
     ]);
     const [setsPlayed, setSetsPlayed] = useState(2); // mejor de 3, 3er set opcional
     const [loading, setLoading] = useState(false);
+    const insets = useSafeAreaInsets();
 
     const updateSet = (index: number, key: 'p1' | 'p2', value: number) => {
         setSets((prev) => prev.map((s, i) => (i === index ? { ...s, [key]: value } : s)));
@@ -90,7 +92,7 @@ export default function MatchScoreModal({
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
             <View style={styles.overlay}>
-                <View style={styles.container}>
+                <View style={[styles.container, { paddingBottom: Spacing.sm + insets.bottom }]}>
                     <View style={styles.header}>
                         <Text style={styles.title}>Cargar resultado</Text>
                         <TouchableOpacity onPress={handleClose} disabled={loading}>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-    View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView,
+    View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { showAlert } from '../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,7 +39,6 @@ export default function ForgotPasswordScreen() {
 
                     {sent ? (
                         <View style={styles.sentContainer}>
-                            <Text style={{ fontSize: 60 }}></Text>
                             <Text style={styles.title}>¡Email enviado!</Text>
                             <Text style={styles.subtitle}>
                                 Revisá tu bandeja de entrada y seguí el link para restablecer tu contraseña.

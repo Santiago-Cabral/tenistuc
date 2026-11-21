@@ -12,7 +12,7 @@ import { Colors, Spacing, Typography, Radius, Shadow } from '../../src/theme';
 import { Avatar } from '../../src/components/ui';
 import { useAuthStore } from '../../src/stores/authStore';
 import {
-    getPayments, markPaymentStatus, PendingPayment,
+    getPayments, markPaymentStatus, removeParticipant, PendingPayment,
 } from '../../src/services/organizerService';
 import { notifyUser } from '../../src/services/notificationService';
 
@@ -93,6 +93,31 @@ export default function PaymentsScreen() {
         } finally {
             setUpdatingId(null);
         }
+    };
+
+    const handleRemovePlayer = (item: PendingPayment) => {
+        showAlert(
+            'Quitar jugador',
+            `¿Sacar a ${item.player_name} de "${item.tournament_name}"? Se borra su inscripción y sale del fixture.`,
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Quitar',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setUpdatingId(item.id);
+                        try {
+                            await removeParticipant(item.tournament_id, item.player_id, item.id);
+                            setPayments((prev) => prev.filter((p) => p.id !== item.id));
+                        } catch (e: any) {
+                            showAlert('No se pudo quitar', e.message ?? 'Intentá de nuevo');
+                        } finally {
+                            setUpdatingId(null);
+                        }
+                    },
+                },
+            ],
+        );
     };
 
     const notifyPlayer = (item: PendingPayment) => {
@@ -183,6 +208,18 @@ export default function PaymentsScreen() {
                                         <Ionicons name="notifications-outline" size={16} color={Colors.primary} />
                                     </TouchableOpacity>
                                     <TouchableOpacity
+                                        style={styles.removeBtn}
+                                        onPress={() => handleRemovePlayer(p)}
+                                        disabled={updatingId === p.id}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
+                                        {updatingId === p.id ? (
+                                            <ActivityIndicator size="small" color={Colors.error} />
+                                        ) : (
+                                            <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                                        )}
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
                                         style={[styles.statusBtn, isEnabled ? styles.statusBtnPaid : styles.statusBtnPending]}
                                         onPress={() => togglePayment(p)}
                                         disabled={updatingId === p.id}
@@ -253,6 +290,11 @@ const styles = StyleSheet.create({
     notifyBtn: {
         width: 28, height: 28, borderRadius: 14,
         backgroundColor: `${Colors.primary}14`,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    removeBtn: {
+        width: 28, height: 28, borderRadius: 14,
+        backgroundColor: `${Colors.error}14`,
         alignItems: 'center', justifyContent: 'center',
     },
     statusBtn: {

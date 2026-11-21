@@ -1,0 +1,66 @@
+# .easignore — controla qué sube EAS Build (REEMPLAZA al .gitignore).
+# Es una copia del .gitignore + re-inclusión de google-services.json:
+# el archivo FCM es necesario en el builder pero no se commitea a git.
+# La línea con "!" va al final para que gane sobre las reglas previas.
+
+# vcs / dependencias (nunca suben)
+.git
+node_modules/
+
+# .env
+.env
+.env.local
+.env*.local
+
+# expo
+expo-env.d.ts
+
+# builds
+dist/
+build/
+.expo/
+expo-export/
+
+# eas
+.android/
+.ios/
+
+# native (generados por prebuild en CNG)
+android/
+ios/
+
+# firebase config (secretos por proyecto; no commitear, pero SÍ sube a EAS)
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro / RN
+.metro-health-check*
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+supabase/.vscode/
+supabase/.env
+
+# Supabase CLI (en src/supabase/)
+**/.temp/
+
+# misc
+.DS_Store
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# proyecto de ejemplo clonado (no forma parte de la app)
+expo-dynamic-notifications/
+
+# contexto del proyecto
+!CONTEXTO_PROYECTO.txt
+
+# FCM de Android: ignorado en git, incluido en el build
+!google-services.json

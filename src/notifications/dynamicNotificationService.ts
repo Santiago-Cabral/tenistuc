@@ -21,6 +21,8 @@ export interface DynamicNotificationRow {
  * Arma la notificación del overlay.
  *
  * - Ícono y color salen del tipo de notificación (mismo criterio que la bandeja).
+ * - Si la notificación trae el avatar del remitente (chat, desafío), se muestra
+ *   en la gota en lugar del ícono genérico.
  * - Al tocarla se marca como leída y se navega a la pantalla correspondiente.
  */
 export function toDynamicNotification(
@@ -28,6 +30,7 @@ export function toDynamicNotification(
     options?: { onDismiss?: (id: string) => void },
 ): IDynamicNotification {
     const theme = getNotificationTypeTheme(row.type);
+    const avatar = row.data?.avatar_url ?? row.avatar_url ?? undefined;
 
     return {
         id: row.id,
@@ -35,7 +38,7 @@ export function toDynamicNotification(
         message: row.body,
         icon: theme.icon,
         accent: theme.fg,
-        avatar: row.avatar_url ?? undefined,
+        avatar,
         onPress: () => {
             markAsRead(row.id).catch(() => {});
             navigateToNotification(row.data);
