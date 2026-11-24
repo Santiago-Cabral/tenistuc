@@ -7,6 +7,33 @@ import { supabase } from '../lib/supabase';
 
 export type TournamentType = 'relampago' | 'por_fechas';
 
+/** Estados del torneo que se muestran también a quien quiere inscribirse. */
+export const TOURNAMENT_STATUSES = [
+    'upcoming', 'open', 'closed', 'in_progress', 'completed',
+] as const;
+
+export type TournamentStatus = (typeof TOURNAMENT_STATUSES)[number];
+
+export const TOURNAMENT_STATUS_LABEL: Record<TournamentStatus, string> = {
+    upcoming: 'Próximamente',
+    open: 'Inscripciones abiertas',
+    closed: 'Lista cerrada',
+    in_progress: 'En juego',
+    completed: 'Finalizado',
+};
+
+export const TOURNAMENT_STATUS_HINT: Record<TournamentStatus, string> = {
+    upcoming: 'Todavía no abrió la inscripción.',
+    open: 'Podés inscribirte mientras haya lugares.',
+    closed: 'No se aceptan inscripciones nuevas.',
+    in_progress: 'El torneo ya comenzó.',
+    completed: 'El torneo terminó. Mirá el fixture y los resultados.',
+};
+
+export function isRegistrationOpen(status: string): boolean {
+    return status === 'open';
+}
+
 /** Para quién está diseñado el torneo (restricción de género). */
 export type TournamentGender = 'todos' | 'femenino' | 'masculino';
 
@@ -17,7 +44,7 @@ export interface Tournament {
     id: string;
     name: string;
     description: string | null;
-    status: 'open' | 'closed' | 'in_progress' | 'completed';
+    status: TournamentStatus;
     image_url: string | null;
     prize_money: number;
     elo_points: number;
@@ -146,6 +173,7 @@ export interface TournamentInput {
     tournament_type?: TournamentType;
     allowed_gender?: TournamentGender;
     allowed_level?: TournamentLevelFilter;
+    status?: TournamentStatus;
 }
 
 /**
@@ -163,7 +191,7 @@ export async function createTournament(
             ...input,
             tournament_type: input.tournament_type ?? 'relampago',
             organizer_id: organizerId,
-            status: 'open',
+            status: 'upcoming',
         })
         .select()
         .single();
@@ -188,7 +216,7 @@ export async function createTournament(
     return tournament;
 }
 
-export async function updateTournament(id: string, input: Partial<TournamentInput & { status: string }>) {
+export async function updateTournament(id: string, input: Partial<TournamentInput>) {
     const { data, error } = await supabase
         .from('tournaments')
         .update(input)
@@ -206,9 +234,13 @@ export async function deleteTournament(id: string) {
 }
 
 // ----------------------------------------------------------------
-// Estado de la lista de inscripción (cerrar / reabrir)
+// Estado del torneo / lista de inscripción
 // ----------------------------------------------------------------
-export async function setTournamentListStatus(tournamentId: string, status: 'open' | 'closed') {
+export async function setTournamentStatus(tournamentId: string, status: TournamentStatus) {
+    if (!TOURNAMENT_STATUSES.includes(status)) {
+        throw new Error('Estado de torneo inválido.');
+    }
+
     const { data, error } = await supabase
         .from('tournaments')
         .update({ status })
@@ -218,6 +250,11 @@ export async function setTournamentListStatus(tournamentId: string, status: 'ope
 
     if (error) throw error;
     return data as Tournament;
+}
+
+/** Alias usado por el toggle rápido de lista cerrada / abierta. */
+export async function setTournamentListStatus(tournamentId: string, status: 'open' | 'closed') {
+    return setTournamentStatus(tournamentId, status);
 }
 
 // ----------------------------------------------------------------

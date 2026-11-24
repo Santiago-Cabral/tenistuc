@@ -18,7 +18,8 @@ import {
     createTournament, updateTournament,
     getTournamentDates, updateTournamentDate,
     Tournament, TournamentType, TournamentDateInput,
-    TournamentGender, TournamentLevelFilter,
+    TournamentGender, TournamentLevelFilter, TournamentStatus,
+    TOURNAMENT_STATUSES, TOURNAMENT_STATUS_HINT, TOURNAMENT_STATUS_LABEL,
 } from '../../services/organizerService';
 
 interface Props {
@@ -88,6 +89,7 @@ export default function CreateTournamentModal({
     const [eloPoints, setEloPoints] = useState('');
 
     const [tournamentType, setTournamentType] = useState<TournamentType>('relampago');
+    const [status, setStatus] = useState<TournamentStatus>('upcoming');
 
     // Foto de portada (fondo del torneo en la app)
     const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -120,6 +122,7 @@ export default function CreateTournamentModal({
             setPrizeMoney(String(editingTournament.prize_money ?? ''));
             setEloPoints(String(editingTournament.elo_points ?? ''));
             setTournamentType(editingTournament.tournament_type ?? 'relampago');
+            setStatus(editingTournament.status ?? 'upcoming');
             setImageUrl(editingTournament.image_url ?? null);
             setAllowedGender(editingTournament.allowed_gender ?? 'todos');
             setAllowedLevel(editingTournament.allowed_level ?? 'todas');
@@ -146,6 +149,7 @@ export default function CreateTournamentModal({
             setPrizeMoney('');
             setEloPoints('');
             setTournamentType('relampago');
+            setStatus('upcoming');
             setImageUrl(null);
             setAllowedGender('todos');
             setAllowedLevel('todas');
@@ -241,6 +245,7 @@ export default function CreateTournamentModal({
                 starts_at: tournamentType === 'relampago'
                     ? singleStart.toISOString()
                     : fechas[0].toISOString(), // primera fecha como referencia general del circuito
+                ...(isEditing ? { status } : {}),
             };
 
             if (isEditing && editingTournament) {
@@ -306,6 +311,27 @@ export default function CreateTournamentModal({
                         <InputField label="Nombre del torneo" value={name} onChangeText={setName} placeholder="Ej: Copa Primavera" />
                         <InputField label="Descripción" value={description} onChangeText={setDescription} placeholder="Opcional" />
                         <InputField label="Sede" value={location} onChangeText={setLocation} placeholder="Ej: Lawn Tenis Club" />
+
+                        {isEditing && (
+                            <View>
+                                <Text style={styles.sectionLabel}>Estado del torneo</Text>
+                                <View style={styles.chipsRow}>
+                                    {TOURNAMENT_STATUSES.map((s) => (
+                                        <TouchableOpacity
+                                            key={s}
+                                            style={[styles.chip, status === s && styles.chipActive]}
+                                            onPress={() => setStatus(s)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Text style={[styles.chipText, status === s && styles.chipTextActive]}>
+                                                {TOURNAMENT_STATUS_LABEL[s]}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                                <Text style={styles.statusHint}>{TOURNAMENT_STATUS_HINT[status]}</Text>
+                            </View>
+                        )}
 
                         {/* ── Foto de portada ─────────────────────────────── */}
                         <Text style={styles.sectionLabel}>Foto de portada</Text>
@@ -527,6 +553,7 @@ const styles = StyleSheet.create({
         marginTop: Spacing.sm,
     },
     helperText: { ...Typography.bodySm, color: Colors.onSurfaceVariant, marginBottom: Spacing.sm },
+    statusHint: { ...Typography.bodySm, color: Colors.onSurfaceVariant, marginTop: Spacing.sm },
 
     typeSelector: { flexDirection: 'row', gap: Spacing.md },
     typeOption: {
