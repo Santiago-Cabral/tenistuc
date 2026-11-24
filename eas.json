@@ -15,11 +15,12 @@
                   "preview":  {
                                   "distribution":  "internal",
                                   "env":  {
-                                              "EXPO_PUBLIC_SUPABASE_URL":  "https://qodajlsxihukgfdvntjy.supabase.co",
-                                              "EXPO_PUBLIC_SUPABASE_ANON_KEY":  "sb_publishable_kD8wmUHqlK_VHBE019188g_Y_FtE_wp"
-                                          }
-                              },
-                  "production":  {
+                                   "EXPO_PUBLIC_SUPABASE_URL":  "https://qodajlsxihukgfdvntjy.supabase.co",
+                                               "EXPO_PUBLIC_SUPABASE_ANON_KEY":  "sb_publishable_kD8wmUHqlK_VHBE019188g_Y_FtE_wp",
+                                               "CMAKE_BUILD_PARALLEL_LEVEL":  "2"
+                                           }
+                               },
+                   "production":  {
                                      "autoIncrement":  true,
                                      "env":  {
                                                  "EXPO_PUBLIC_SUPABASE_URL":  "https://qodajlsxihukgfdvntjy.supabase.co",
