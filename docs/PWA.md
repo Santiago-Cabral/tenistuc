@@ -35,7 +35,7 @@ npx tsc --noEmit   # verificación de tipos
 - Fase 2: Supabase web con localStorage/PKCE, OAuth web, callback `/auth/callback`, aviso de sesión perdida por Safari.
 - Fase 3: inputs de fecha nativos del navegador y subida de imágenes con canvas/JPEG para web; Skia sigue no-op en web.
 - Fase 4: HTML/CSS de columna 480px, `100dvh` + `visualViewport`, `viewport-fit=cover`, inputs ≥16px, `touch-action`, notificaciones sin blur web.
-- Fase 5: manifest, íconos, splashes iOS, service worker y banner de instalación para Safari.
+- Fase 5: manifest, íconos, splashes iOS, service worker, banner de instalación para Safari y labels de tabs web con `WebTabLabel` (`numberOfLines={2}`) para evitar el ellipsis de Expo Router.
 
 ## PWA / iOS
 

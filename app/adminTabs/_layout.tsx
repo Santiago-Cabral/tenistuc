@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
+import WebTabLabel from '../../src/components/navigation/WebTabLabel';
 
 export default function AdminTabsLayout() {
     const insets = useSafeAreaInsets();
@@ -15,11 +16,17 @@ export default function AdminTabsLayout() {
                 tabBarActiveTintColor: Colors.primary,
                 tabBarInactiveTintColor: Colors.onSurfaceVariant,
                 tabBarStyle: {
-                    height: isWeb ? 76 : 56 + insets.bottom,
+                    height: isWeb ? 84 : 56 + insets.bottom,
                     paddingBottom: isWeb ? 24 : insets.bottom + 4,
-                    paddingTop: 8,
+                    paddingTop: isWeb ? 6 : 8,
                 },
-                tabBarLabelStyle: isWeb ? { fontSize: 9, marginTop: 1 } : undefined,
+                tabBarLabel: isWeb
+                    ? ({ color, children }) => (
+                        <WebTabLabel color={typeof color === 'string' ? color : Colors.onSurfaceVariant}>
+                            {children}
+                        </WebTabLabel>
+                    )
+                    : undefined,
                 tabBarItemStyle: isWeb ? { paddingHorizontal: 0 } : undefined,
             }}
         >
