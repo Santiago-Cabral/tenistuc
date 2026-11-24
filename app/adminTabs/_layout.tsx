@@ -2,9 +2,11 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Platform } from 'react-native';
 
 export default function AdminTabsLayout() {
     const insets = useSafeAreaInsets();
+    const isWeb = Platform.OS === 'web';
 
     return (
         <Tabs
@@ -13,10 +15,12 @@ export default function AdminTabsLayout() {
                 tabBarActiveTintColor: Colors.primary,
                 tabBarInactiveTintColor: Colors.onSurfaceVariant,
                 tabBarStyle: {
-                    height: 56 + insets.bottom,
-                    paddingBottom: insets.bottom + 4,
+                    height: isWeb ? 76 : 56 + insets.bottom,
+                    paddingBottom: isWeb ? 24 : insets.bottom + 4,
                     paddingTop: 8,
                 },
+                tabBarLabelStyle: isWeb ? { fontSize: 10, marginTop: 2 } : undefined,
+                tabBarItemStyle: isWeb ? { paddingHorizontal: 2 } : undefined,
             }}
         >
             <Tabs.Screen

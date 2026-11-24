@@ -2,12 +2,13 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../src/theme/index";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
 import { useUnreadMessagesCount } from "../../src/hooks/useNotifications";
 
 export default function OrganizerTabsLayout() {
     const insets = useSafeAreaInsets();
     const unreadMessages = useUnreadMessagesCount();
+    const isWeb = Platform.OS === "web";
 
     return (
         <Tabs
@@ -16,10 +17,12 @@ export default function OrganizerTabsLayout() {
                 tabBarActiveTintColor: Colors.primary,
                 tabBarInactiveTintColor: Colors.onSurfaceVariant,
                 tabBarStyle: {
-                    height: 56 + insets.bottom,
-                    paddingBottom: insets.bottom + 4,
+                    height: isWeb ? 76 : 56 + insets.bottom,
+                    paddingBottom: isWeb ? 24 : insets.bottom + 4,
                     paddingTop: 8,
                 },
+                tabBarLabelStyle: isWeb ? { fontSize: 10, marginTop: 2 } : undefined,
+                tabBarItemStyle: isWeb ? { paddingHorizontal: 2 } : undefined,
             }}
         >
             <Tabs.Screen

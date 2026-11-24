@@ -10,7 +10,6 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./logoverde.png",
       "lang": "es"
     },
     "ios": {

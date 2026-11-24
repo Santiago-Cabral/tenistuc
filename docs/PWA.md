@@ -24,7 +24,8 @@ npx tsc --noEmit   # verificación de tipos
 - `vercel.json` define `buildCommand: npm run build:web`, `outputDirectory: dist`, rewrite `/(.*)` → `/index.html` y `Cache-Control` sin caché para `/sw.js`.
 - `dist/` y `.env` ya están en `.gitignore`: Vercel genera el build y las variables se cargan desde el dashboard.
 - Variables de entorno en Vercel (Production y Preview): `EXPO_PUBLIC_SUPABASE_URL` y `EXPO_PUBLIC_SUPABASE_ANON_KEY`. No agregar `NOTIFY_SECRET` ni secretos de servidor.
-- En Supabase → Auth → URL Configuration agregar el dominio de Vercel a Site URL/Redirect allowlist; para previews usar `https://*.vercel.app/**`.
+- En Supabase → Auth → URL Configuration agregar `https://<dominio>/auth/callback` en Redirect URLs (y Site URL con el origen); para previews usar `https://*.vercel.app/**`.
+- El OAuth web vuelve a `/auth/callback` (`app/auth/callback.web.tsx`); si redirectTo es solo `/`, el código queda sin procesar.
 - Desplegar con `vercel` (preview) o `vercel --prod`; la CLI imprime la URL HTTPS. También funciona conectando el repo por GitHub.
 - Vercel compila con `NODE_ENV=production`, por lo que el service worker se registra también en previews.
 
@@ -39,7 +40,8 @@ npx tsc --noEmit   # verificación de tipos
 ## PWA / iOS
 
 - `public/manifest.json`: `display: standalone`, `start_url: /`, `theme_color` `#2D6A4F`, iconos `any` y `maskable`.
-- Íconos generados: `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`.
+- Íconos generados desde `public/icon-transparent.png` (logo sin fondo): `icon-192.png` e `icon-512.png` transparentes para favicon/manifiesto; `apple-touch-icon.png` con círculo verde; `icon-maskable-512.png` para Android.
+- El favicon se declara como PNG transparente en `public/index.html` y `app/+html.tsx` (`/icon-192.png`), sin ICO con fondo.
 - Splashes: `splash-1125x2436.png`, `splash-1170x2532.png`, `splash-1179x2556.png`, `splash-1242x2688.png`, `splash-1290x2796.png`.
 - `InstallPrompt.web.tsx` muestra una vez el aviso “Compartir → Agregar a pantalla de inicio” en iOS Safari no standalone; se descarta guardando `tenistuc:install-dismissed` en localStorage.
 - No se usa `beforeinstallprompt` porque Safari no lo soporta.
