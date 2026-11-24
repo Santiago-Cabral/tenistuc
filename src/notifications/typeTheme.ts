@@ -25,6 +25,13 @@ export const NOTIFICATION_TYPE_THEME: Record<NotificationType, NotificationTypeT
     message: { icon: 'chatbubble', bg: Colors.secondaryContainer, fg: Colors.onSecondaryContainer },
     match_result: { icon: 'tennisball', bg: Colors.primaryContainer, fg: Colors.primaryDim },
     match_confirmed: { icon: 'shield-checkmark', bg: Colors.primaryContainer, fg: Colors.primaryDim },
+    doubles_invite_received: { icon: 'people', bg: Colors.primaryContainer, fg: Colors.primaryDim },
+    doubles_invite_accepted: { icon: 'checkmark-circle', bg: Colors.secondaryContainer, fg: Colors.onSecondaryContainer },
+    doubles_invite_rejected: { icon: 'close-circle', bg: Colors.errorContainer, fg: Colors.error },
+    doubles_challenge_received: { icon: 'flash', bg: Colors.primaryContainer, fg: Colors.primaryDim },
+    doubles_challenge_accepted: { icon: 'checkmark-circle', bg: Colors.secondaryContainer, fg: Colors.onSecondaryContainer },
+    doubles_chat_ready: { icon: 'chatbubbles', bg: Colors.secondaryContainer, fg: Colors.onSecondaryContainer },
+    doubles_chat_closed: { icon: 'archive', bg: Colors.surfaceContainerHigh, fg: Colors.onSurfaceVariant },
 };
 
 export function getNotificationTypeTheme(type: string | undefined | null): NotificationTypeTheme {

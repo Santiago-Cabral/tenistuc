@@ -1,25 +1,46 @@
 alter table public.notifications drop constraint if exists notifications_type_check;
 
-alter table public.notifications add constraint notifications_type_check
-check (type in (
-    'message',
-    'challenge',
-    'challenge_received',
-    'challenge_accepted',
-    'challenge_rejected',
-    'tournament',
-    'tournament_new',
-    'tournament_start',
-    'tournament_update',
-    'tournament_registration',
-    'fixture_ready',
-    'match_scheduled',
-    'match_result',
-    'match_confirmed',
-    'payment',
-    'system',
-    'test'
-));
+do $$
+declare
+    v_types  text[];
+    v_values text;
+begin
+    select array_agg(distinct type)
+      into v_types
+      from public.notifications
+     where type is not null;
+
+    v_types := coalesce(v_types, array[]::text[]) || array[
+        'message',
+        'challenge',
+        'challenge_received',
+        'challenge_accepted',
+        'challenge_rejected',
+        'tournament',
+        'tournament_new',
+        'tournament_start',
+        'tournament_update',
+        'tournament_registration',
+        'fixture_ready',
+        'match_scheduled',
+        'match_result',
+        'match_confirmed',
+        'payment',
+        'system',
+        'test',
+        'doubles_chat_ready',
+        'doubles_chat_closed'
+    ]::text[];
+
+    select string_agg(quote_literal(t), ', ' order by t)
+      into v_values
+      from (select distinct unnest(v_types) as t) s;
+
+    execute format(
+        'alter table public.notifications add constraint notifications_type_check check (type in (%s))',
+        v_values
+    );
+end $$;
 
 create or replace function public.send_push_direct(
     p_user_id uuid,

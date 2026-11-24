@@ -12,7 +12,8 @@ const PUSH_TOKEN_KEY = 'tenistuc:expo-push-token'
 
 export function isPushAvailable(): boolean {
   if (Platform.OS === 'web') return false
-  const inExpoGo = Constants.executionEnvironment === 'storeClient'
+  const inExpoGo =
+    Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient'
   return !(Platform.OS === 'android' && inExpoGo)
 }
 
@@ -106,12 +107,16 @@ export async function ensureNotificationPermission(
   if (!Notifications) return false
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'TenisTuc',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#2D6A4F',
-    })
+    try {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'TenisTuc',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#2D6A4F',
+      })
+    } catch (e: any) {
+      console.warn('[Notifications] No se pudo crear el canal de Android:', e.message ?? e)
+    }
   }
 
   const { status: existing } = await Notifications.getPermissionsAsync()

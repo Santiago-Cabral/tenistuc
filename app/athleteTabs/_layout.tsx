@@ -27,7 +27,7 @@ export default function AthleteTabsLayout() {
                 options={{
                     title: "Inicio",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="home-outline" color={color} size={size} />
+                        <Ionicons name="home-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />
@@ -36,7 +36,7 @@ export default function AthleteTabsLayout() {
                 options={{
                     title: "Rivales",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="flash-outline" color={color} size={size} />
+                        <Ionicons name="flash-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />
@@ -45,7 +45,7 @@ export default function AthleteTabsLayout() {
                 options={{
                     title: "Ranking",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="trophy-outline" color={color} size={size} />
+                        <Ionicons name="trophy-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />
@@ -54,7 +54,7 @@ export default function AthleteTabsLayout() {
                 options={{
                     title: "Torneos",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="calendar-outline" color={color} size={size} />
+                        <Ionicons name="calendar-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />
@@ -64,7 +64,7 @@ export default function AthleteTabsLayout() {
                     title: "Mensajes",
                     tabBarIcon: ({ color, size }) => (
                         <View>
-                            <Ionicons name="chatbubble-outline" color={color} size={size} />
+                            <Ionicons name="chatbubble-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                             {unreadMessages > 0 && <View style={styles.dot} />}
                         </View>
                     ),
@@ -75,7 +75,7 @@ export default function AthleteTabsLayout() {
                 options={{
                     title: "Perfil",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="person-outline" color={color} size={size} />
+                        <Ionicons name="person-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />

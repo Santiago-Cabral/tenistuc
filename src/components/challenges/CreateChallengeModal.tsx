@@ -46,7 +46,7 @@ const MATCH_TYPES: {
 }[] = [
     { value: 'friendly', title: MATCH_TYPE_LABELS.friendly, subtitle: 'Sin puntos', icon: 'happy-outline' },
     { value: 'training', title: MATCH_TYPE_LABELS.training, subtitle: 'A practicar', icon: 'barbell-outline' },
-    { value: 'competitive', title: MATCH_TYPE_LABELS.competitive, subtitle: '5 pts', icon: 'trophy-outline' },
+    { value: 'competitive', title: MATCH_TYPE_LABELS.competitive, subtitle: 'Puntos', icon: 'trophy-outline' },
 ];
 
 export default function CreateChallengeModal({
@@ -189,7 +189,7 @@ export default function CreateChallengeModal({
                             })}
                         </View>
                         {matchType === 'competitive' && (
-                            <Text style={styles.typeNote}>El ganador suma 5 puntos.</Text>
+                            <Text style={styles.typeNote}>El ganador suma puntos.</Text>
                         )}
 
                         <Text style={styles.label}>Fecha y hora</Text>

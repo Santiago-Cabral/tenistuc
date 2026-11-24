@@ -1,57 +1,26 @@
 // src/services/authService.ts
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import {
-    GoogleSignin,
-    isErrorWithCode,
-    isSuccessResponse,
-    statusCodes,
-} from '@react-native-google-signin/google-signin';
+import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 
 // Cierra la sesión de navegador que quedó abierta (evita warnings en web/iOS).
 WebBrowser.maybeCompleteAuthSession();
 
-const SCHEME = 'tenistuc';
 const CALLBACK_PATH = 'auth/callback';
 
 export type OAuthProvider = 'google' | 'apple';
 
-// ─── Google nativo ────────────────────────────────────────────────────────────
-// Usa el selector de cuentas del sistema (no abre navegador), así que Google
-// no muestra el dominio de Supabase. Requiere un build de EAS (no Expo Go).
-
-GoogleSignin.configure({
-    // Client ID de tipo "Web application" de Google Cloud (el mismo que está
-    // cargado en Supabase → Authentication → Providers → Google).
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-});
+export function isGoogleSignInAvailable(): boolean {
+    return true;
+}
 
 /**
  * Devuelve `true` si se inició sesión, `false` si el usuario canceló.
  * Cualquier otro error se lanza para que la pantalla lo muestre.
  */
 export async function signInWithGoogle(): Promise<boolean> {
-    try {
-        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-        const response = await GoogleSignin.signIn();
-
-        if (!isSuccessResponse(response)) return false; // canceló
-
-        const idToken = response.data.idToken;
-        if (!idToken) throw new Error('Google no devolvió el token de identidad');
-
-        const { error } = await supabase.auth.signInWithIdToken({
-            provider: 'google',
-            token: idToken,
-        });
-        if (error) throw error;
-
-        return true;
-    } catch (e: any) {
-        if (isErrorWithCode(e) && e.code === statusCodes.SIGN_IN_CANCELLED) return false;
-        throw e;
-    }
+    return signInWithProvider('google');
 }
 
 // ─── Apple (flujo web, sin cambios) ───────────────────────────────────────────
@@ -59,13 +28,15 @@ export async function signInWithGoogle(): Promise<boolean> {
  * Flujo OAuth para apps móviles con Supabase (PKCE):
  *   1. pedimos la URL de autorización del proveedor (sin abrir el navegador)
  *   2. la abrimos en una sesión de navegador segura
- *   3. el proveedor vuelve a `tenistuc://auth/callback?code=...`
+ *   3. el proveedor vuelve al redirect de Expo Go / APK con `?code=...`
  *   4. canjeamos el `code` por una sesión
  *
  * Requiere `flowType: 'pkce'` en el cliente de Supabase (ver src/lib/supabase.ts).
  */
 async function signInWithProvider(provider: OAuthProvider): Promise<boolean> {
-    const redirectTo = Linking.createURL(CALLBACK_PATH, { scheme: SCHEME });
+    const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
+        : Linking.createURL(CALLBACK_PATH);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider,

@@ -74,6 +74,17 @@ function routeFor(n: AppNotification): string | null {
         case 'match_confirmed':
         case 'match_scheduled':
             return '/matches';
+        case 'doubles_invite_received':
+        case 'doubles_invite_accepted':
+        case 'doubles_invite_rejected':
+        case 'doubles_challenge_received':
+            return '/doubles';
+        case 'doubles_challenge_accepted':
+            return n.data?.match_id ? '/matches' : '/doubles';
+        case 'doubles_chat_ready':
+            return targetId ? `/chat/${targetId}` : '/doubles';
+        case 'doubles_chat_closed':
+            return n.data?.match_id ? '/matches' : '/doubles';
         default:
             return null;
     }

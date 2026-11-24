@@ -27,7 +27,7 @@ export default function OrganizerTabsLayout() {
                 options={{
                     title: "Panel",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="speedometer-outline" color={color} size={size} />
+                        <Ionicons name="speedometer-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />
@@ -36,7 +36,7 @@ export default function OrganizerTabsLayout() {
                 options={{
                     title: "Torneos",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="trophy-outline" color={color} size={size} />
+                        <Ionicons name="trophy-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />
@@ -45,7 +45,7 @@ export default function OrganizerTabsLayout() {
                 options={{
                     title: "Canchas",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="business-outline" color={color} size={size} />
+                        <Ionicons name="business-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />
@@ -54,7 +54,7 @@ export default function OrganizerTabsLayout() {
                 options={{
                     title: "Jugadores",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="people-outline" color={color} size={size} />
+                        <Ionicons name="people-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />
@@ -64,7 +64,7 @@ export default function OrganizerTabsLayout() {
                     title: "Mensajes",
                     tabBarIcon: ({ color, size }) => (
                         <View>
-                            <Ionicons name="chatbubbles-outline" color={color} size={size} />
+                            <Ionicons name="chatbubbles-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                             {unreadMessages > 0 && <View style={styles.dot} />}
                         </View>
                     ),
@@ -75,7 +75,7 @@ export default function OrganizerTabsLayout() {
                 options={{
                     title: "Fixture",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="git-branch-outline" color={color} size={size} />
+                        <Ionicons name="git-branch-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />
@@ -84,7 +84,7 @@ export default function OrganizerTabsLayout() {
                 options={{
                     title: "Perfil",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="person-outline" color={color} size={size} />
+                        <Ionicons name="person-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
                 }}
             />

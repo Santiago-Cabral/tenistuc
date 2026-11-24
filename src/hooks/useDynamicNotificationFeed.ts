@@ -22,7 +22,7 @@ const LAST_SHOWN_KEY = 'tenistuc:last-dynamic-notification';
 /** Evita mostrar dos veces la misma notificación (carrera entre realtime y fetch). */
 const shownIds = new Set<string>();
 
-export function useDynamicNotificationFeed() {
+export function useDynamicNotificationFeed(enabled = true) {
     const { session } = useAuthStore();
     const { trigger } = useDynamicNotifications();
     const userId = session?.user?.id ?? null;
@@ -47,7 +47,7 @@ export function useDynamicNotificationFeed() {
 
     // ── Realtime: cada INSERT en `notifications` se muestra en pantalla ────────
     useEffect(() => {
-        if (!userId) return;
+        if (!enabled || !userId) return;
 
         const channel = supabase
             .channel(`dynamic-notifications:${userId}`)
@@ -70,11 +70,11 @@ export function useDynamicNotificationFeed() {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [userId, showRow]);
+    }, [enabled, userId, showRow]);
 
     // ── Al abrir la app: mostrar la sin leer más reciente (una sola vez) ───────
     useEffect(() => {
-        if (!userId) return;
+        if (!enabled || !userId) return;
 
         let cancelled = false;
 
@@ -106,5 +106,5 @@ export function useDynamicNotificationFeed() {
         return () => {
             cancelled = true;
         };
-    }, [userId, showRow]);
+    }, [enabled, userId, showRow]);
 }

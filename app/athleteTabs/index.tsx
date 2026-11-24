@@ -146,6 +146,7 @@ export default function HomeScreen() {
             supabase
                 .from('profiles')
                 .select('id', { count: 'exact', head: true })
+                .eq('role', 'athlete')
                 .gt('elo', profile.elo),
 
             supabase
@@ -624,6 +625,28 @@ export default function HomeScreen() {
                         </>
                     )}
 
+                    <SectionHeader
+                        title="Dobles"
+                        action="Abrir"
+                        onAction={() => router.push('/doubles' as any)}
+                    />
+                    <Card style={styles.matchCard}>
+                        <TouchableOpacity
+                            style={styles.doublesRow}
+                            onPress={() => router.push('/doubles' as any)}
+                            activeOpacity={0.85}
+                        >
+                            <View style={styles.doublesIconWrap}>
+                                <Ionicons name="people-outline" size={22} color={Colors.primary} />
+                            </View>
+                            <View style={styles.doublesInfo}>
+                                <Text style={styles.doublesTitle}>Jugá en pareja</Text>
+                                <Text style={styles.doublesSubtitle}>Invitaciones, duplas y desafíos</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={18} color={Colors.onSurfaceVariant} />
+                        </TouchableOpacity>
+                    </Card>
+
                     {/* ── Torneos Activos ── */}
                     <SectionHeader
                         title="Torneos Activos"
@@ -786,6 +809,14 @@ const styles = StyleSheet.create({
     },
     vsText: { fontFamily: 'Lexend_700Bold', fontSize: 11, color: Colors.onSurfaceVariant, letterSpacing: 0.5 },
     matchBtns: { flexDirection: 'row', gap: Spacing.sm },
+    doublesRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+    doublesIconWrap: {
+        width: 44, height: 44, borderRadius: Radius.lg,
+        backgroundColor: Colors.primaryContainer, alignItems: 'center', justifyContent: 'center',
+    },
+    doublesInfo: { flex: 1, gap: 2 },
+    doublesTitle: { ...Typography.titleSm, color: Colors.onSurface },
+    doublesSubtitle: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
     rejectLink: { alignItems: 'center', paddingTop: 2 },
     rejectLinkText: { ...Typography.labelSm, color: Colors.error },
     waitingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 2 },

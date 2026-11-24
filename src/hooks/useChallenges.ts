@@ -31,6 +31,17 @@ export interface Challenge {
     created_at: string;
     challenger?: ChallengeProfile;
     challenged?: ChallengeProfile;
+    match_format?: 'singles' | 'doubles' | null;
+    team1_id?: string | null;
+    team2_id?: string | null;
+    partner1_id?: string | null;
+    partner2_id?: string | null;
+    challenger_partner_id?: string | null;
+    challenged_partner_id?: string | null;
+    challenger_team_id?: string | null;
+    challenged_team_id?: string | null;
+    partner1?: ChallengeProfile | null;
+    partner2?: ChallengeProfile | null;
 }
 
 export interface CreateChallengePayload {

@@ -41,6 +41,10 @@ export default function Index() {
         return <Redirect href="/login" />;
     }
 
+    if (profile.role === 'admin') {
+        return <Redirect href={'/adminTabs/dashboard' as any} />;
+    }
+
     if (profile.role === 'organizer') {
         return <Redirect href="/organizerTabs/dashboard" />;
     }

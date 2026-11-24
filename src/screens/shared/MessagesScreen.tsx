@@ -20,6 +20,7 @@ interface Conversation {
     other_user: { id: string; full_name: string; avatar_url?: string; is_online?: boolean; last_seen?: string };
     last_message: string;
     last_message_at: string;
+    isDoubles: boolean;
 }
 
 // Una conversación se considera "reciente" si tuvo actividad en las últimas 24hs
@@ -40,7 +41,7 @@ export default function MessagesScreen() {
         const { data, error } = await supabase
             .from('conversations')
             .select(`
-                id, last_message, last_message_at,
+                id, last_message, last_message_at, kind,
                 p1:profiles!conversations_participant1_id_fkey(id, full_name, avatar_url, is_online, last_seen),
                 p2:profiles!conversations_participant2_id_fkey(id, full_name, avatar_url, is_online, last_seen)
             `)
@@ -56,6 +57,7 @@ export default function MessagesScreen() {
                     other_user: p1?.id === profile.id ? p2 : p1,
                     last_message: c.last_message ?? '',
                     last_message_at: c.last_message_at,
+                    isDoubles: c.kind === 'doubles',
                 };
             }));
         }
@@ -161,6 +163,9 @@ export default function MessagesScreen() {
                                     <Text style={styles.convName} numberOfLines={1}>
                                         {c.other_user?.full_name ?? 'Usuario'}
                                     </Text>
+                                    {c.isDoubles && (
+                                        <Text style={styles.doublesTag}>DOBLES</Text>
+                                    )}
                                     <Text style={styles.convTime}>{formatTime(c.last_message_at)}</Text>
                                 </View>
                                 <Text style={styles.convLast} numberOfLines={1}>
@@ -226,6 +231,16 @@ const styles = StyleSheet.create({
     convInfo: { flex: 1 },
     convTopRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3, gap: Spacing.sm },
     convName: { ...Typography.titleMd, color: Colors.onSurface, flex: 1 },
+    doublesTag: {
+        ...Typography.labelSm,
+        color: Colors.primary,
+        backgroundColor: Colors.primaryContainer,
+        borderRadius: Radius.full,
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 2,
+        marginRight: Spacing.xs,
+        overflow: 'hidden',
+    },
     convTime: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
     convLast: { ...Typography.bodyMd, color: Colors.onSurfaceVariant },
     separator: { height: 1, backgroundColor: Colors.surfaceContainerLow, marginLeft: 86 },

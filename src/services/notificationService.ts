@@ -18,7 +18,14 @@ export type NotificationType =
     | 'match_confirmed'
     | 'tournament_registration'
     | 'tournament_update'
-    | 'fixture_ready';
+    | 'fixture_ready'
+    | 'doubles_invite_received'
+    | 'doubles_invite_accepted'
+    | 'doubles_invite_rejected'
+    | 'doubles_challenge_received'
+    | 'doubles_challenge_accepted'
+    | 'doubles_chat_ready'
+    | 'doubles_chat_closed';
 
 export interface NotificationData {
     type?: string;
@@ -26,6 +33,9 @@ export interface NotificationData {
     tournament_id?: string;
     conversation_id?: string;
     match_id?: string;
+    doubles_invitation_id?: string;
+    doubles_challenge_id?: string;
+    doubles_team_id?: string;
     /** Avatar del remitente (lo manda la edge function `notify`). */
     avatar_url?: string;
 }

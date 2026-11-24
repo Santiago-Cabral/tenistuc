@@ -16,10 +16,13 @@ import {
     AGE_CATEGORIES, AGE_CATEGORY_LABELS, ageCategoryLabel, type AgeCategory,
 } from '../../constants/ageCategories';
 import { isActuallyOnline } from '../../services/presenceService';
+import { useDoubles } from '../../hooks/useDoubles';
+import { inviteToDoubles, leaveDoublesTeam, type DoublesTeam } from '../../services/doublesService';
 import CreateChallengeModal from '../../components/challenges/CreateChallengeModal';
 
 interface Rival {
     id: string;
+    role: string;
     full_name: string;
     username: string;
     avatar_url?: string | null;
@@ -65,9 +68,18 @@ const sameCity = (a?: string | null, b?: string | null): boolean => {
     return na === nb || na.includes(nb) || nb.includes(na);
 };
 
+const hasDoublesWith = (
+    teams: Array<{ player1_id: string; player2_id: string; status: string }>,
+    otherId: string
+) => teams.some((t) =>
+    (t.status === 'invited' || t.status === 'ready') &&
+    (t.player1_id === otherId || t.player2_id === otherId)
+);
+
 export default function RivalsScreen() {
     const router = useRouter();
     const { profile } = useAuthStore();
+    const { myTeams, activeTeam, reload: reloadDoubles } = useDoubles();
     const [rivals, setRivals] = useState<Rival[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -78,13 +90,15 @@ export default function RivalsScreen() {
     const [selectedRival, setSelectedRival] = useState<Rival | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [notifying, setNotifying] = useState(false);
+    const [invitingRivalId, setInvitingRivalId] = useState<string | null>(null);
 
     const loadRivals = useCallback(async () => {
         if (!profile) return;
         setLoading(true);
         const { data } = await supabase
             .from('profiles')
-            .select('id, full_name, username, avatar_url, city, elo, level, age_category, gender, wins, losses, is_online, last_seen')
+            .select('id, role, full_name, username, avatar_url, city, elo, level, age_category, gender, wins, losses, is_online, last_seen')
+            .eq('role', 'athlete')
             .neq('id', profile.id)
             .limit(80);
 
@@ -107,9 +121,12 @@ export default function RivalsScreen() {
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
                 const upd = payload.new as Partial<Rival>;
                 if (!upd?.id) return;
-                setRivals((prev) =>
-                    prev.map((r) => (r.id === upd.id ? { ...r, ...upd } : r))
-                );
+                setRivals((prev) => {
+                    if (upd.role && upd.role !== 'athlete') {
+                        return prev.filter((r) => r.id !== upd.id);
+                    }
+                    return prev.map((r) => (r.id === upd.id ? { ...r, ...upd } : r));
+                });
             })
             .subscribe();
         return () => { supabase.removeChannel(sub); };
@@ -216,6 +233,55 @@ export default function RivalsScreen() {
                 { text: 'OK' },
             ].filter(Boolean) as any
         );
+    };
+
+    const handleInviteDoubles = (rival: Rival) => {
+        const inDoubles = hasDoublesWith(myTeams, rival.id) ||
+            (!!activeTeam && hasDoublesWith([activeTeam], rival.id));
+        if (inDoubles || invitingRivalId) return;
+        const name = rival.full_name ?? rival.username;
+
+        showAlert('Invitar a dobles', `¿Querés invitar a ${name} a formar una dupla?`, [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+                text: 'Invitar',
+                onPress: async () => {
+                    setInvitingRivalId(rival.id);
+                    try {
+                        await inviteToDoubles(rival.id);
+                        await reloadDoubles();
+                        showAlert('¡Listo!', `Le enviamos la invitación a ${name}.`);
+                    } catch (e: any) {
+                        showAlert('No se pudo enviar la invitación', e.message ?? 'Intentá de nuevo.');
+                    } finally {
+                        setInvitingRivalId(null);
+                    }
+                },
+            },
+        ]);
+    };
+
+    const handleCancelDoublesInvite = (team: DoublesTeam, rival: Rival) => {
+        const name = rival.full_name ?? rival.username;
+        showAlert('Cancelar invitación', `¿Querés cancelar la invitación de dobles enviada a ${name}?`, [
+            { text: 'No', style: 'cancel' },
+            {
+                text: 'Cancelar invitación',
+                style: 'destructive',
+                onPress: async () => {
+                    setInvitingRivalId(rival.id);
+                    try {
+                        await leaveDoublesTeam(team.id);
+                        await reloadDoubles();
+                        showAlert('Listo', `Cancelaste la invitación enviada a ${name}.`);
+                    } catch (e: any) {
+                        showAlert('No se pudo cancelar', e.message ?? 'Intentá de nuevo.');
+                    } finally {
+                        setInvitingRivalId(null);
+                    }
+                },
+            },
+        ]);
     };
 
     const winrate = (r: Rival) => {
@@ -337,6 +403,14 @@ export default function RivalsScreen() {
                         const diff = eloDiff(rival);
                         const diffLabel = diff === 0 ? 'Igual ELO' : `${diff > 0 ? '+' : ''}${diff} ELO`;
                         const diffColor = diff > 0 ? Colors.error : diff < 0 ? Colors.primary : Colors.onSurfaceVariant;
+                        const inDoubles = hasDoublesWith(myTeams, rival.id) ||
+                            (!!activeTeam && hasDoublesWith([activeTeam], rival.id));
+                        const pendingInvite = myTeams.find(team =>
+                            team.status === 'invited' &&
+                            team.created_by === profile?.id &&
+                            (team.player1_id === rival.id || team.player2_id === rival.id)
+                        ) ?? null;
+                        const inviteDisabled = !pendingInvite && (inDoubles || invitingRivalId !== null);
 
                         return (
                             <Card style={styles.rivalCard}>
@@ -390,6 +464,31 @@ export default function RivalsScreen() {
                                 >
                                     <Ionicons name="flash" size={16} color={Colors.onPrimary} />
                                     <Text style={styles.challengeBtnText}>DESAFIAR</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.inviteBtn,
+                                        inviteDisabled && styles.inviteBtnDisabled,
+                                    ]}
+                                onPress={() => pendingInvite
+                                    ? handleCancelDoublesInvite(pendingInvite, rival)
+                                    : handleInviteDoubles(rival)}
+                                disabled={inviteDisabled}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons
+                                    name={pendingInvite ? 'close-circle-outline' : 'people-outline'}
+                                    size={16}
+                                    color={inviteDisabled ? Colors.onSurfaceVariant : Colors.primary}
+                                />
+                                <Text style={[styles.inviteBtnText, inviteDisabled && styles.inviteBtnTextDisabled]}>
+                                    {pendingInvite
+                                        ? 'Cancelar invitación'
+                                        : inDoubles
+                                            ? 'Ya tienen una dupla'
+                                            : 'Invitar a dobles'}
+                                </Text>
                                 </TouchableOpacity>
                             </Card>
                         );
@@ -534,6 +633,30 @@ const styles = StyleSheet.create({
         paddingVertical: Spacing.sm + 2,
     },
     challengeBtnText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: Colors.onPrimary, letterSpacing: 0.5 },
+
+    inviteBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: Colors.primaryContainer,
+        borderWidth: 1,
+        borderColor: Colors.primary + '33',
+        borderRadius: Radius.full,
+        paddingVertical: Spacing.sm + 2,
+        ...Shadow.ambient,
+    },
+    inviteBtnDisabled: {
+        backgroundColor: Colors.surfaceContainerHigh,
+        borderColor: Colors.outlineVariant,
+    },
+    inviteBtnText: {
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+        fontSize: 13,
+        color: Colors.primary,
+        letterSpacing: 0.3,
+    },
+    inviteBtnTextDisabled: { color: Colors.onSurfaceVariant },
 
     empty: { alignItems: 'center', paddingTop: 80, gap: Spacing.md },
     emptyText: { ...Typography.bodyMd, color: Colors.onSurfaceVariant, textAlign: 'center', paddingHorizontal: Spacing.xl },

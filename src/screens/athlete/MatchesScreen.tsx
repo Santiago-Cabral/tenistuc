@@ -542,7 +542,7 @@ function MatchDetailModal({
     return (
         <Modal visible={state.visible} transparent animationType="slide" onRequestClose={onClose}>
             <View style={modalStyles.overlay}>
-                <View style={[modalStyles.sheet, { maxHeight: '88%' }]}>
+                <View style={[modalStyles.sheet, { maxHeight: '95%' }]}>
                     <View style={modalStyles.handle} />
                     <ScrollView showsVerticalScrollIndicator={false}>
                         <Text style={modalStyles.title}>Detalle del partido</Text>

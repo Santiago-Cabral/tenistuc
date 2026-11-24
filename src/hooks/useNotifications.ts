@@ -10,13 +10,13 @@ import { supabase } from '../lib/supabase'
 // acá la app sigue viva aunque no haya soporte push en el host actual.
 
 export function useNotifications() {
-  const { session } = useAuthStore()
+  const { session, profile } = useAuthStore()
   const notifListener = useRef<{ remove: () => void } | null>(null)
   const responseListener = useRef<{ remove: () => void } | null>(null)
 
   useEffect(() => {
     const userId = session?.user?.id
-    if (!userId) return
+    if (!userId || profile?.role === 'admin') return
 
     if (!isPushAvailable()) {
       console.warn('[Notifications] Notificaciones no disponibles en Expo Go (Android). Usá un development build.')
@@ -66,7 +66,7 @@ export function useNotifications() {
       notifListener.current?.remove()
       responseListener.current?.remove()
     }
-  }, [session?.user?.id])
+  }, [session?.user?.id, profile?.role])
 }
 
 async function loadNotificationsModule() {
@@ -82,9 +82,12 @@ function handleTap(data: Record<string, string>) {
   navigateToNotification(data);
 }
 
+let unreadNotificationsChannelSeq = 0
+
 // Hook separado para badge de no leídas
 export function useUnreadNotificationsCount() {
   const { session } = useAuthStore()
+  const channelKeyRef = useRef(++unreadNotificationsChannelSeq)
   const [count, setCount] = useState(0)
 
   useEffect(() => {
@@ -101,7 +104,7 @@ export function useUnreadNotificationsCount() {
 
     // Realtime para actualizaciones en vivo
     const channel = supabase
-      .channel('notifications-count')
+      .channel(`notifications-count:${channelKeyRef.current}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
@@ -124,8 +127,11 @@ export function useUnreadNotificationsCount() {
 
 // Cuenta las notificaciones de tipo 'message' sin leer. Se usa para el punto
 // rojo en el ícono de Mensajes (se limpia al abrir la bandeja o el chat).
+let unreadMessagesChannelSeq = 0
+
 export function useUnreadMessagesCount() {
   const { session } = useAuthStore()
+  const channelKeyRef = useRef(++unreadMessagesChannelSeq)
   const [count, setCount] = useState(0)
 
   useEffect(() => {
@@ -146,7 +152,7 @@ export function useUnreadMessagesCount() {
     load()
 
     const channel = supabase
-      .channel(`messages-unread:${userId}`)
+      .channel(`messages-unread:${userId}:${channelKeyRef.current}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },

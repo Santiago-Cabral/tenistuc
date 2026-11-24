@@ -13,7 +13,7 @@ import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../../theme/index';
 import { Button, InputField, PrivacyConsent } from '../../../components/ui/index';
 import { useAuthStore } from '../../../stores/authStore';
-import { signInWithGoogle } from '../../../services/authService';
+import { isGoogleSignInAvailable, signInWithGoogle } from '../../../services/authService';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -26,6 +26,7 @@ export default function LoginScreen() {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [socialLoading, setSocialLoading] = useState(false);
+    const googleAvailable = isGoogleSignInAvailable();
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -170,23 +171,29 @@ export default function LoginScreen() {
                     </View>
 
                     {/* Social login */}
-                    <View style={styles.socialRow}>
-                        <TouchableOpacity
-                            style={[styles.socialBtn, (loading || socialLoading) && styles.socialBtnDisabled]}
-                            onPress={handleGoogleSignIn}
-                            disabled={loading || socialLoading}
-                            activeOpacity={0.85}
-                        >
-                            {socialLoading ? (
-                                <ActivityIndicator size="small" color={Colors.primary} />
-                            ) : (
-                                <>
-                                    <Ionicons name="logo-google" size={20} color={Colors.onSurface} />
-                                    <Text style={styles.socialBtnText}>Google</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    </View>
+                    {googleAvailable ? (
+                        <View style={styles.socialRow}>
+                            <TouchableOpacity
+                                style={[styles.socialBtn, (loading || socialLoading) && styles.socialBtnDisabled]}
+                                onPress={handleGoogleSignIn}
+                                disabled={loading || socialLoading}
+                                activeOpacity={0.85}
+                            >
+                                {socialLoading ? (
+                                    <ActivityIndicator size="small" color={Colors.primary} />
+                                ) : (
+                                    <>
+                                        <Ionicons name="logo-google" size={20} color={Colors.onSurface} />
+                                        <Text style={styles.socialBtnText}>Google</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <Text style={styles.socialUnavailable}>
+                            Google disponible en la app instalada (no en Expo Go).
+                        </Text>
+                    )}
 
                     <View style={styles.registerRow}>
                         <Text style={styles.registerText}>¿No tenés cuenta? </Text>
@@ -300,6 +307,12 @@ const styles = StyleSheet.create({
         borderColor: Colors.outlineVariant,
     },
     socialBtnDisabled: { opacity: 0.5 },
+    socialUnavailable: {
+        ...Typography.bodySm,
+        color: Colors.onSurfaceVariant,
+        textAlign: 'center',
+        marginTop: Spacing.lg,
+    },
     socialBtnText: {
         ...Typography.labelLg,
         color: Colors.onSurface,

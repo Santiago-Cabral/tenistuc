@@ -25,7 +25,7 @@ import { AppAlertHost } from "../src/services/appAlert";
 import { ensureNotificationPermission } from "../src/notifications/notificationService";
 
 export default function RootLayout() {
-    const { initialize, initialized, session } = useAuthStore();
+    const { initialize, initialized, session, profile } = useAuthStore();
     const router = useRouter();
     const segments = useSegments();
     useNotifications();
@@ -72,7 +72,15 @@ export default function RootLayout() {
         if (session && inAuthScreens) {
             router.replace("/");
         }
-    }, [session, initialized, segments, router]);
+
+        if (session && !profile) return;
+        if (seg0 === "adminTabs" && profile?.role !== "admin") {
+            router.replace("/");
+        }
+        if (profile?.role === "admin" && (seg0 === "athleteTabs" || seg0 === "organizerTabs")) {
+            router.replace("/adminTabs/dashboard" as any);
+        }
+    }, [session, profile?.role, initialized, segments, router]);
 
     if (!initialized || !fontsLoaded) {
         return (
@@ -103,7 +111,8 @@ export default function RootLayout() {
  * que necesita el contexto del overlay para disparar las notificaciones.
  */
 function AppShell() {
-    useDynamicNotificationFeed();
+    const { profile } = useAuthStore();
+    useDynamicNotificationFeed(profile?.role !== 'admin');
 
     return (
         <>

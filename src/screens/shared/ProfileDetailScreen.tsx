@@ -10,13 +10,15 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Typography, Spacing, Radius } from '../../theme';
+import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { Avatar, Badge, Button, Card, SectionHeader, SkeletonList } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { ageCategoryLabel } from '../../constants/ageCategories';
 import { matchesService } from '../../services/matchService';
 import { isActuallyOnline } from '../../services/presenceService';
+import { useDoubles } from '../../hooks/useDoubles';
+import { inviteToDoubles } from '../../services/doublesService';
 import CreateChallengeModal from '../../components/challenges/CreateChallengeModal';
 
 function timeAgo(iso?: string | null): string {
@@ -32,16 +34,26 @@ function timeAgo(iso?: string | null): string {
     return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+const hasDoublesWith = (
+    teams: Array<{ player1_id: string; player2_id: string; status: string }>,
+    otherId: string
+) => teams.some((t) =>
+    (t.status === 'invited' || t.status === 'ready') &&
+    (t.player1_id === otherId || t.player2_id === otherId)
+);
+
 export default function ProfileDetailScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const { profile: myProfile } = useAuthStore();
+    const { myTeams, activeTeam, reload: reloadDoubles } = useDoubles();
     const [player, setPlayer] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [reloadKey, setReloadKey] = useState(0);
     const [globalRank, setGlobalRank] = useState<number | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
+    const [inviting, setInviting] = useState(false);
 
     useEffect(() => {
         if (!id) {
@@ -74,6 +86,10 @@ export default function ProfileDetailScreen() {
     }, [id, reloadKey]);
 
     const isMe = myProfile?.id === id;
+    const hasActiveDoubles = !!player && (
+        hasDoublesWith(myTeams, player.id) ||
+        (!!activeTeam && hasDoublesWith([activeTeam], player.id))
+    );
 
     const winrate = player && (player.wins + player.losses) > 0
         ? Math.round((player.wins / (player.wins + player.losses)) * 100)
@@ -124,6 +140,30 @@ export default function ProfileDetailScreen() {
         } catch (e: any) {
             showAlert('Error', e.message ?? 'No se pudo abrir el chat');
         }
+    };
+
+    const handleInviteDoubles = () => {
+        if (!player || hasActiveDoubles || inviting) return;
+        const name = player.full_name ?? player.username;
+
+        showAlert('Invitar a dobles', `¿Querés invitar a ${name} a formar una dupla?`, [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+                text: 'Invitar',
+                onPress: async () => {
+                    setInviting(true);
+                    try {
+                        await inviteToDoubles(player.id);
+                        await reloadDoubles();
+                        showAlert('¡Listo!', `Le enviamos la invitación a ${name}.`);
+                    } catch (e: any) {
+                        showAlert('No se pudo enviar la invitación', e.message ?? 'Intentá de nuevo.');
+                    } finally {
+                        setInviting(false);
+                    }
+                },
+            },
+        ]);
     };
 
     if (loading) return (
@@ -294,6 +334,32 @@ export default function ProfileDetailScreen() {
                         </View>
                     )}
 
+                    {!isMe && player.role === 'athlete' && (
+                        <TouchableOpacity
+                            style={[
+                                styles.actionBtnCustom,
+                                styles.actionBtnSecondary,
+                                styles.inviteBtn,
+                                (hasActiveDoubles || inviting) && styles.actionBtnDisabled,
+                            ]}
+                            onPress={handleInviteDoubles}
+                            disabled={hasActiveDoubles || inviting}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons
+                                name="people-outline"
+                                size={18}
+                                color={hasActiveDoubles ? Colors.onSurfaceVariant : Colors.primary}
+                            />
+                            <Text style={[
+                                styles.actionBtnTextSecondary,
+                                (hasActiveDoubles || inviting) && styles.actionBtnTextDisabled,
+                            ]}>
+                                {hasActiveDoubles ? 'Ya tienen una dupla' : 'Invitar a dobles'}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+
                     {isMe && (
                         <Button
                             label="Editar perfil"
@@ -420,6 +486,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.primary + '33',
     },
+    inviteBtn: { marginTop: Spacing.sm, ...Shadow.ambient },
+    actionBtnDisabled: {
+        backgroundColor: Colors.surfaceContainerHigh,
+        borderColor: Colors.outlineVariant,
+    },
     actionBtnTextPrimary: {
         ...Typography.labelLg,
         color: '#fff',
@@ -427,5 +498,9 @@ const styles = StyleSheet.create({
     actionBtnTextSecondary: {
         ...Typography.labelLg,
         color: Colors.primary,
+    },
+    actionBtnTextDisabled: {
+        ...Typography.labelLg,
+        color: Colors.onSurfaceVariant,
     },
 });

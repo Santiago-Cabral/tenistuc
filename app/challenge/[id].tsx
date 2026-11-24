@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Typography, Spacing, Radius } from '../../src/theme';
+import { supabase } from '../../src/lib/supabase';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useChallenges, Challenge, ChallengeProfile } from '../../src/hooks/useChallenges';
 import { useLiveRefresh } from '../../src/hooks/useLiveRefresh';
@@ -85,6 +86,23 @@ function formatLocalDateTime(value: string | null): string {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const DOUBLES_PROFILE_FIELDS = 'id, full_name, avatar_url, elo, level, is_online, last_seen';
+
+function isDoublesChallenge(c: Challenge | null): boolean {
+    if (!c) return false;
+    return c.match_format === 'doubles'
+        || (!!c.team1_id && !!c.team2_id)
+        || (!!c.challenger_team_id && !!c.challenged_team_id)
+        || !!(c.partner1_id || c.partner2_id || c.challenger_partner_id || c.challenged_partner_id);
+}
+
+function getDoublesPartnerIds(c: Challenge): { challenger: string | null; challenged: string | null } {
+    return {
+        challenger: c.partner1_id ?? c.challenger_partner_id ?? null,
+        challenged: c.partner2_id ?? c.challenged_partner_id ?? null,
+    };
+}
+
 function ChallengeSkeleton() {
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
@@ -148,6 +166,7 @@ export default function ChallengeDetailScreen() {
     } = useChallenges();
 
     const [challenge, setChallenge] = useState<Challenge | null>(null);
+    const [doublesProfiles, setDoublesProfiles] = useState<Record<string, ChallengeProfile>>({});
     const [fetching, setFetching] = useState(true);
     const [actionLoading, setActionLoading] = useState<
         'accept' | 'reject' | 'cancel' | 'repropose' | null
@@ -171,6 +190,22 @@ export default function ChallengeDetailScreen() {
         const data = await getChallenge(id);
         if (request !== requestRef.current) return;
         setChallenge(data);
+        setDoublesProfiles({});
+        if (data && isDoublesChallenge(data)) {
+            const partnerIds = getDoublesPartnerIds(data);
+            const ids = [partnerIds.challenger, partnerIds.challenged]
+                .filter((v): v is string => !!v);
+            if (ids.length) {
+                const { data: profiles } = await supabase
+                    .from('profiles')
+                    .select(DOUBLES_PROFILE_FIELDS)
+                    .in('id', ids);
+                if (request !== requestRef.current) return;
+                const byId: Record<string, ChallengeProfile> = {};
+                (profiles ?? []).forEach((p: any) => { byId[p.id] = p as ChallengeProfile; });
+                setDoublesProfiles(byId);
+            }
+        }
         hasLoadedRef.current = true;
         setFetching(false);
     }, [id, getChallenge]);
@@ -219,6 +254,13 @@ export default function ChallengeDetailScreen() {
     const me: ChallengeProfile | undefined = isChallenger
         ? challenge.challenger
         : challenge.challenged;
+
+    const isDoubles = isDoublesChallenge(challenge);
+    const doublesPartnerIds = isDoubles ? getDoublesPartnerIds(challenge) : null;
+    const challengerPartner = doublesPartnerIds?.challenger
+        ? doublesProfiles[doublesPartnerIds.challenger] : undefined;
+    const challengedPartner = doublesPartnerIds?.challenged
+        ? doublesProfiles[doublesPartnerIds.challenged] : undefined;
 
     const isPending = challenge.status === 'pending';
     const lastProposalIsMine = challenge.proposed_by === profile?.id;
@@ -316,22 +358,73 @@ export default function ChallengeDetailScreen() {
                 showsVerticalScrollIndicator={false}
             >
                 <Card style={styles.playersCard}>
-                    <View style={styles.playerCol}>
-                        <Avatar uri={me?.avatar_url ?? null} size={64} online={isActuallyOnline(me)} />
-                        <Text style={styles.playerName}>{me?.full_name ?? 'Vos'}</Text>
-                        <Text style={styles.playerLevel}>{me?.level}</Text>
-                    </View>
+                    {isDoubles ? (
+                        <>
+                            <View style={styles.doublesTeamCol}>
+                                <Text style={styles.doublesTeamLabel}>
+                                    Pareja A{isChallenger ? ' (vos)' : ''}
+                                </Text>
+                                <Avatar
+                                    uri={challenge.challenger?.avatar_url ?? null} size={56}
+                                    online={isActuallyOnline(challenge.challenger)}
+                                />
+                                <Text style={styles.playerName}>
+                                    {challenge.challenger?.full_name ?? '?'}
+                                </Text>
+                                <Avatar
+                                    uri={challengerPartner?.avatar_url ?? null} size={44}
+                                    online={isActuallyOnline(challengerPartner)}
+                                />
+                                <Text style={styles.playerName}>
+                                    {challengerPartner?.full_name ?? '?'}
+                                </Text>
+                            </View>
 
-                    <View style={styles.vsCol}>
-                        <Text style={styles.vsText}>VS</Text>
-                        <Ionicons name="tennisball-outline" size={20} color={Colors.primary} />
-                    </View>
+                            <View style={styles.vsCol}>
+                                <Text style={styles.vsText}>VS</Text>
+                                <Ionicons name="tennisball-outline" size={20} color={Colors.primary} />
+                            </View>
 
-                    <View style={styles.playerCol}>
-                        <Avatar uri={rival?.avatar_url ?? null} size={64} online={isActuallyOnline(rival)} />
-                        <Text style={styles.playerName}>{rival?.full_name ?? 'Rival'}</Text>
-                        <Text style={styles.playerLevel}>{rival?.level}</Text>
-                    </View>
+                            <View style={styles.doublesTeamCol}>
+                                <Text style={styles.doublesTeamLabel}>
+                                    Pareja B{isChallenged ? ' (vos)' : ''}
+                                </Text>
+                                <Avatar
+                                    uri={challenge.challenged?.avatar_url ?? null} size={56}
+                                    online={isActuallyOnline(challenge.challenged)}
+                                />
+                                <Text style={styles.playerName}>
+                                    {challenge.challenged?.full_name ?? '?'}
+                                </Text>
+                                <Avatar
+                                    uri={challengedPartner?.avatar_url ?? null} size={44}
+                                    online={isActuallyOnline(challengedPartner)}
+                                />
+                                <Text style={styles.playerName}>
+                                    {challengedPartner?.full_name ?? '?'}
+                                </Text>
+                            </View>
+                        </>
+                    ) : (
+                        <>
+                            <View style={styles.playerCol}>
+                                <Avatar uri={me?.avatar_url ?? null} size={64} online={isActuallyOnline(me)} />
+                                <Text style={styles.playerName}>{me?.full_name ?? 'Vos'}</Text>
+                                <Text style={styles.playerLevel}>{me?.level}</Text>
+                            </View>
+
+                            <View style={styles.vsCol}>
+                                <Text style={styles.vsText}>VS</Text>
+                                <Ionicons name="tennisball-outline" size={20} color={Colors.primary} />
+                            </View>
+
+                            <View style={styles.playerCol}>
+                                <Avatar uri={rival?.avatar_url ?? null} size={64} online={isActuallyOnline(rival)} />
+                                <Text style={styles.playerName}>{rival?.full_name ?? 'Rival'}</Text>
+                                <Text style={styles.playerLevel}>{rival?.level}</Text>
+                            </View>
+                        </>
+                    )}
                 </Card>
 
                 <View style={styles.statusRow}>
@@ -542,6 +635,8 @@ const styles = StyleSheet.create({
         paddingVertical: Spacing.xl,
     },
     playerCol: { flex: 1, alignItems: 'center', gap: Spacing.xs },
+    doublesTeamCol: { flex: 1, alignItems: 'center', gap: Spacing.xs },
+    doublesTeamLabel: { ...Typography.labelSm, color: Colors.primary, textAlign: 'center' },
     playerName: { ...Typography.labelLg, color: Colors.onSurface, textAlign: 'center' },
     playerLevel: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
     vsCol: { alignItems: 'center', gap: Spacing.xs, paddingHorizontal: Spacing.sm },

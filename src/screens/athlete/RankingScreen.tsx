@@ -16,9 +16,12 @@ import { ageCategoryLabel, type AgeCategory } from '../../constants/ageCategorie
 import { LEVELS, type Level } from '../../constants/levels';
 import { useLiveRefresh, LivePayload } from '../../hooks/useLiveRefresh';
 import CreateChallengeModal from '../../components/challenges/CreateChallengeModal';
+import { getRankedTeams, type DoublesTeam } from '../../services/doublesService';
+import { TeamIdentity, teamLabel } from '../../components/doubles/DoublesUi';
 
 interface RankedPlayer {
     id: string;
+    role: string;
     full_name: string;
     username: string;
     avatar_url: string | null;
@@ -33,6 +36,7 @@ interface RankedPlayer {
 
 type GenderFilter = 'all' | 'femenino' | 'masculino';
 type LevelFilter = Level | 'all';
+type RankingView = 'teams' | 'players';
 
 const GENDER_OPTIONS: { value: GenderFilter; label: string }[] = [
     { value: 'all', label: 'General' },
@@ -55,6 +59,8 @@ export default function RankingScreen() {
     const router = useRouter();
     const { profile } = useAuthStore();
     const [players, setPlayers] = useState<RankedPlayer[]>([]);
+    const [teams, setTeams] = useState<DoublesTeam[]>([]);
+    const [view, setView] = useState<RankingView>('teams');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [genderFilter, setGenderFilter] = useState<GenderFilter>('all');
@@ -75,7 +81,8 @@ export default function RankingScreen() {
         try {
             let query = supabase
                 .from('profiles')
-                .select('id, full_name, username, avatar_url, city, elo, level, gender, age_category, wins, losses');
+                .select('id, role, full_name, username, avatar_url, city, elo, level, gender, age_category, wins, losses')
+                .eq('role', 'athlete');
 
             if (genderFilter !== 'all') {
                 query = query.eq('gender', genderFilter);
@@ -92,6 +99,12 @@ export default function RankingScreen() {
                 showAlert('Error', 'No se pudo cargar el ranking');
             } else if (data) {
                 setPlayers(data as RankedPlayer[]);
+            }
+
+            try {
+                setTeams(await getRankedTeams());
+            } catch {
+                setTeams([]);
             }
         } finally {
             didInitialLoad.current = true;
@@ -113,10 +126,12 @@ export default function RankingScreen() {
         setPlayers((prev) => {
             const idx = prev.findIndex((p) => p.id === row.id);
             const current = idx >= 0 ? prev[idx] : null;
+            const nextRole = row.role ?? current?.role ?? null;
             const nextGender = row.gender ?? current?.gender ?? null;
             const nextLevel = row.level ?? current?.level ?? null;
 
             const matchesFilters =
+                nextRole === 'athlete' &&
                 (genderFilter === 'all' || nextGender === genderFilter) &&
                 (levelFilter === 'all' || nextLevel === levelFilter);
 
@@ -130,6 +145,7 @@ export default function RankingScreen() {
                         i === idx
                             ? {
                                 ...p,
+                                role: row.role ?? p.role,
                                 elo: row.elo ?? p.elo,
                                 wins: row.wins ?? p.wins,
                                 losses: row.losses ?? p.losses,
@@ -145,6 +161,7 @@ export default function RankingScreen() {
                         ...prev,
                         {
                             id: row.id,
+                            role: row.role ?? 'athlete',
                             full_name: row.full_name ?? row.username ?? 'Jugador',
                             username: row.username ?? '',
                             avatar_url: row.avatar_url ?? null,
@@ -164,7 +181,37 @@ export default function RankingScreen() {
         });
     }, [genderFilter, levelFilter]);
 
-    useLiveRefresh('profiles', applyLiveProfile);
+    const applyLiveTeam = useCallback((payload: LivePayload) => {
+        if (payload.eventType === 'DELETE') {
+            setTeams(prev => prev.filter(team => team.id !== payload.old?.id));
+            return;
+        }
+
+        const row = payload.new;
+        if (!row?.id) return;
+
+        setTeams(prev => {
+            const idx = prev.findIndex(team => team.id === row.id);
+            if (idx < 0) return prev;
+            if (row.status && row.status !== 'ready') {
+                return prev.filter(team => team.id !== row.id);
+            }
+
+            const next = prev.map(team => team.id === row.id ? {
+                ...team,
+                elo: row.elo ?? team.elo,
+                wins: row.wins ?? team.wins,
+                losses: row.losses ?? team.losses,
+                is_permanent: row.is_permanent ?? team.is_permanent,
+                status: row.status ?? team.status,
+            } : team);
+
+            return [...next].sort((a, b) => b.elo - a.elo).slice(0, 100);
+        });
+    }, []);
+
+    useLiveRefresh('profiles', applyLiveProfile, undefined, view === 'players');
+    useLiveRefresh('doubles_teams', applyLiveTeam, undefined, view === 'teams');
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -264,13 +311,16 @@ export default function RankingScreen() {
     const genderLabel = GENDER_OPTIONS.find(option => option.value === genderFilter)?.label ?? 'General';
     const levelLabel = levelFilter === 'all' ? 'Todas las categorías' : levelFilter;
     const hasFilters = genderFilter !== 'all' || levelFilter !== 'all';
+    const myTeam = teams.find(team =>
+        team.player1_id === profile?.id || team.player2_id === profile?.id);
+    const myTeamPosition = myTeam ? teams.findIndex(team => team.id === myTeam.id) + 1 : 0;
 
     if (loading) {
         return (
             <SafeAreaView style={styles.safe} edges={['top']}>
                 <View style={styles.header}>
                     <Text style={styles.title}>Ranking</Text>
-                    <Text style={styles.subtitle}>Cargando jugadores...</Text>
+                    <Text style={styles.subtitle}>Cargando ranking...</Text>
                 </View>
                 <SkeletonList count={7} variant="row" />
             </SafeAreaView>
@@ -282,11 +332,34 @@ export default function RankingScreen() {
             <View style={styles.header}>
                 <Text style={styles.title}>Ranking</Text>
                 <Text style={styles.subtitle}>
-                    {players.length} jugadores · {genderLabel} · {levelLabel}
+                    {view === 'teams'
+                        ? `${teams.length} duplas activas · Ranking por ELO`
+                        : `${players.length} jugadores · ${genderLabel} · ${levelLabel}`}
                 </Text>
             </View>
 
-            <View style={styles.filtersWrap}>
+            <View style={styles.viewRow}>
+                <TouchableOpacity
+                    onPress={() => setView('teams')}
+                    style={[styles.viewChip, view === 'teams' && styles.viewChipActive]}
+                    activeOpacity={0.85}
+                >
+                    <Ionicons name="people-outline" size={16} color={view === 'teams' ? Colors.onPrimary : Colors.primary} />
+                    <Text style={[styles.viewChipText, view === 'teams' && styles.viewChipTextActive]}>Duplas</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={() => setView('players')}
+                    style={[styles.viewChip, view === 'players' && styles.viewChipActive]}
+                    activeOpacity={0.85}
+                >
+                    <Ionicons name="person-outline" size={16} color={view === 'players' ? Colors.onPrimary : Colors.primary} />
+                    <Text style={[styles.viewChipText, view === 'players' && styles.viewChipTextActive]}>Jugadores</Text>
+                </TouchableOpacity>
+            </View>
+
+            {view === 'players' && (
+                <>
+                    <View style={styles.filtersWrap}>
                 <Text style={styles.filtersLabel}>GÉNERO</Text>
                 <View style={styles.filterRow}>
                     {GENDER_OPTIONS.map(option => {
@@ -325,11 +398,27 @@ export default function RankingScreen() {
                             </TouchableOpacity>
                         );
                     })}
+                        </View>
+                    </View>
+                </>
+            )}
+
+            {view === 'teams' && myTeam && (
+                <View style={styles.myTeamWrap}>
+                    <View style={styles.myTeamHeader}>
+                        <Ionicons name="star" size={14} color={Colors.primary} />
+                        <Text style={styles.myTeamLabel}>TU DUPLA · PUESTO #{myTeamPosition}</Text>
+                    </View>
+                    <TeamIdentity
+                        team={myTeam}
+                        size={40}
+                        meta={`${myTeam.elo} ELO · ${myTeam.is_permanent ? 'Permanente' : 'En formación'}`}
+                    />
                 </View>
-            </View>
+            )}
 
             <FlatList
-                data={players}
+                data={(view === 'teams' ? teams : players) as Array<DoublesTeam | RankedPlayer>}
                 keyExtractor={(item) => item.id}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.list}
@@ -341,9 +430,36 @@ export default function RankingScreen() {
                         colors={[Colors.primary]}
                     />
                 }
-                renderItem={({ item: player, index }) => {
+                renderItem={({ item, index }) => {
                     const position = index + 1;
                     const badge = rankBadgeColor(position);
+
+                    if (view === 'teams') {
+                        const team = item as DoublesTeam;
+                        const isMine = team.player1_id === profile?.id || team.player2_id === profile?.id;
+
+                        return (
+                            <Card style={[styles.row, isMine && styles.rowMe]}>
+                                <View style={[styles.rankCircle, { backgroundColor: badge.bg }]}>
+                                    <Text style={[styles.rankNumber, { color: badge.text }]}>{position}</Text>
+                                </View>
+                                <View style={styles.playerLeft}>
+                                    <TeamIdentity
+                                        team={team}
+                                        size={44}
+                                        meta={isMine ? 'Tu dupla' : teamLabel(team)}
+                                    />
+                                </View>
+                                <View style={styles.right}>
+                                    <Text style={styles.eloValue}>{team.elo ?? 1000}</Text>
+                                    <Text style={styles.eloLabel}>ELO</Text>
+                                    <Text style={styles.playerWinrate}>{team.wins} V · {team.losses} D</Text>
+                                </View>
+                            </Card>
+                        );
+                    }
+
+                    const player = item as RankedPlayer;
                     const isMe = player.id === profile?.id;
 
                     return (
@@ -407,11 +523,13 @@ export default function RankingScreen() {
                     <View style={styles.empty}>
                         <Ionicons name="trophy-outline" size={48} color={Colors.onSurfaceVariant} />
                         <Text style={styles.emptyText}>
-                            {hasFilters
-                                ? `No hay jugadores en ${genderLabel} · ${levelLabel}`
-                                : 'Todavía no hay jugadores en el ranking'}
+                            {view === 'teams'
+                                ? 'Todavía no hay duplas activas en el ranking'
+                                : hasFilters
+                                    ? `No hay jugadores en ${genderLabel} · ${levelLabel}`
+                                    : 'Todavía no hay jugadores en el ranking'}
                         </Text>
-                        {hasFilters && (
+                        {view === 'players' && hasFilters && (
                             <TouchableOpacity onPress={() => {
                                 setGenderFilter('all');
                                 setLevelFilter('all');
@@ -442,6 +560,23 @@ const styles = StyleSheet.create({
     header: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
     title: { fontFamily: 'Lexend_700Bold', fontSize: 28, color: Colors.onSurface, letterSpacing: -0.5 },
     subtitle: { ...Typography.bodyMd, color: Colors.onSurfaceVariant },
+    viewRow: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.md },
+    viewChip: {
+        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        gap: Spacing.sm, minHeight: 44, borderRadius: Radius.full,
+        borderWidth: 1, borderColor: Colors.outlineVariant,
+        backgroundColor: Colors.surfaceContainerLowest,
+    },
+    viewChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    viewChipText: { ...Typography.labelLg, color: Colors.onSurface },
+    viewChipTextActive: { color: Colors.onPrimary },
+    myTeamWrap: {
+        marginHorizontal: Spacing.xl, marginBottom: Spacing.md,
+        padding: Spacing.md, borderRadius: Radius.lg,
+        backgroundColor: Colors.primaryContainer, gap: Spacing.sm,
+    },
+    myTeamHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+    myTeamLabel: { ...Typography.labelSm, color: Colors.primary, letterSpacing: 0.6 },
     filtersWrap: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.md, gap: Spacing.sm },
     filtersLabel: { ...Typography.labelSm, color: Colors.onSurfaceVariant, letterSpacing: 0.8 },
     filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },

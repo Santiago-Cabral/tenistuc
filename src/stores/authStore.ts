@@ -12,12 +12,14 @@ import type { AgeCategory } from '../constants/ageCategories';
 const PROFILE_COLUMNS =
     'id, username, full_name, avatar_url, role, city, club, elo, level, age_category, gender, wins, losses, play_style, bio, is_online, last_seen, privacy_consented_at, privacy_policy_version, created_at';
 
+export type UserRole = 'athlete' | 'organizer' | 'admin';
+
 export interface Profile {
     id: string;
     username: string;
     full_name: string;
     avatar_url: string | null;
-    role: 'athlete' | 'organizer';
+    role: UserRole;
     city: string | null;
     club: string | null;
     elo: number;

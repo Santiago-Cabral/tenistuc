@@ -17,7 +17,8 @@ export type LiveTable =
     | 'challenges'
     | 'notifications'
     | 'tournaments'
-    | 'messages';
+    | 'messages'
+    | 'doubles_teams';
 
 export interface LivePayload {
     eventType: 'INSERT' | 'UPDATE' | 'DELETE';

@@ -40,6 +40,23 @@ export function navigateToNotification(data?: NotificationData | null) {
         case 'match_scheduled':
             router.push('/matches' as any);
             break;
+        case 'doubles_invite_received':
+        case 'doubles_invite_accepted':
+        case 'doubles_invite_rejected':
+        case 'doubles_challenge_received':
+            router.push('/doubles' as any);
+            break;
+        case 'doubles_challenge_accepted':
+            router.push((data?.match_id ? '/matches' : '/doubles') as any);
+            break;
+        case 'doubles_chat_ready':
+            targetId
+                ? router.push(`/chat/${targetId}` as any)
+                : router.push('/doubles' as any);
+            break;
+        case 'doubles_chat_closed':
+            router.push((data?.match_id ? '/matches' : '/doubles') as any);
+            break;
         default:
             router.push('/notifications' as any);
             break;

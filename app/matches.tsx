@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, Alert, Modal, TextInput, ActivityIndicator, Platform,
+  RefreshControl, Modal, TextInput, ActivityIndicator, Platform,
 } from 'react-native';
 import { showAlert } from '../src/services/appAlert';
+import { getOrCreateDoublesChat, keepDoublesTeam } from '../src/services/doublesService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,9 +16,32 @@ import { useLiveRefresh } from '../src/hooks/useLiveRefresh';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
 interface SetScore { p1: number; p2: number; }
-interface ResultModalState { visible: boolean; matchId: string; opponentId: string; opponentName: string; }
-interface DisputeModalState { visible: boolean; matchId: string; score: any; submitterName: string; }
+interface ResultModalState {
+  visible: boolean; matchId: string; opponentId: string; opponentName: string;
+  matchFormat?: 'singles' | 'doubles';
+  myHeaderId?: string;
+  side1HeaderId?: string;
+  side2HeaderId?: string;
+}
+interface DisputeModalState {
+  visible: boolean; matchId: string; score: any; submitterName: string;
+  matchFormat?: 'singles' | 'doubles';
+  myHeaderId?: string;
+  side1HeaderId?: string;
+  side2HeaderId?: string;
+}
 interface ScheduleModalState { visible: boolean; matchId: string; }
+
+interface MatchSide {
+  headerId: string | null;
+  header: any;
+  partnerId: string | null;
+  partner: any;
+  players: any[];
+  teamId: string | null;
+  label: 'Pareja A' | 'Pareja B';
+  isMine: boolean;
+}
 
 const VENUES = [
   'Lawn Tenis Club', 'Club Atlético San Martín', 'Tucumán Lawn Tennis',
@@ -31,6 +55,32 @@ const isMatchDay = (scheduledAt: string | null): boolean => {
   today.setHours(0, 0, 0, 0);
   matchDate.setHours(0, 0, 0, 0);
   return matchDate <= today;
+};
+
+const getSides = (m: any, myId: string): { a: MatchSide; b: MatchSide; mine: MatchSide; rival: MatchSide } => {
+  const inA = !!myId && !!m && [m.player1_id, m.partner1_id].includes(myId);
+  const inB = !!myId && !!m && [m.player2_id, m.partner2_id].includes(myId);
+  const a: MatchSide = {
+    headerId: m?.player1_id ?? null,
+    header: m?.player1 ?? null,
+    partnerId: m?.partner1_id ?? null,
+    partner: m?.partner1 ?? null,
+    players: [m?.player1, m?.partner1].filter(Boolean),
+    teamId: m?.team1_id ?? null,
+    label: 'Pareja A',
+    isMine: inA,
+  };
+  const b: MatchSide = {
+    headerId: m?.player2_id ?? null,
+    header: m?.player2 ?? null,
+    partnerId: m?.partner2_id ?? null,
+    partner: m?.partner2 ?? null,
+    players: [m?.player2, m?.partner2].filter(Boolean),
+    teamId: m?.team2_id ?? null,
+    label: 'Pareja B',
+    isMine: inB,
+  };
+  return { a, b, mine: inB ? b : a, rival: inB ? a : b };
 };
 
 async function getOrCreateConversation(myId: string, otherId: string): Promise<string | null> {
@@ -199,21 +249,28 @@ function ResultModal({ state, myId, onClose, onSubmitted }: {
   const addSet = () => { if (sets.length < 5) setSets(prev => [...prev, { p1: 0, p2: 0 }]); };
   const removeSet = () => { if (sets.length > 1) setSets(prev => prev.slice(0, -1)); };
 
+  const isDoubles = state.matchFormat === 'doubles';
+  const myHeaderId = state.myHeaderId ?? myId;
+
   const getWinnerId = (): string | null => {
-    let myWins = 0, oppWins = 0;
-    sets.forEach(s => { if (s.p1 > s.p2) myWins++; else if (s.p2 > s.p1) oppWins++; });
-    if (myWins > oppWins) return myId;
-    if (oppWins > myWins) return state.opponentId;
+    let p1Wins = 0, p2Wins = 0;
+    sets.forEach(s => { if (s.p1 > s.p2) p1Wins++; else if (s.p2 > s.p1) p2Wins++; });
+    if (p1Wins > p2Wins) return state.side1HeaderId ?? myHeaderId;
+    if (p2Wins > p1Wins) return state.side2HeaderId ?? state.opponentId;
     return null;
   };
 
   const winnerId = getWinnerId();
-  const iWon = winnerId === myId;
-  const winnerLabel = winnerId === myId
-    ? 'Vos ganaste'
-    : winnerId === state.opponentId
-      ? `Ganó ${state.opponentName.split(' ')[0]}`
-      : null;
+  const iWon = winnerId === myHeaderId;
+  const winnerLabel = isDoubles
+    ? winnerId === state.side1HeaderId ? 'Ganó Pareja A'
+      : winnerId === state.side2HeaderId ? 'Ganó Pareja B'
+        : null
+    : winnerId === myId
+      ? 'Vos ganaste'
+      : winnerId === state.opponentId
+        ? `Ganó ${state.opponentName.split(' ')[0]}`
+        : null;
 
   const handleSubmit = async () => {
     if (!winnerId) {
@@ -242,13 +299,19 @@ function ResultModal({ state, myId, onClose, onSubmitted }: {
         <View style={modalStyles.sheet}>
           <View style={modalStyles.handle} />
           <Text style={modalStyles.title}>Cargar Resultado</Text>
-          <Text style={modalStyles.subtitle}>vs. {state.opponentName}</Text>
+          <Text style={modalStyles.subtitle}>
+            {isDoubles ? 'Pareja A vs. Pareja B' : `vs. ${state.opponentName}`}
+          </Text>
 
           <View style={modalStyles.setRow}>
             <View style={modalStyles.setNumCol} />
-            <Text style={modalStyles.colLabel}>Vos</Text>
+            <Text style={modalStyles.colLabel}>
+              {isDoubles ? 'Pareja A' : 'Vos'}
+            </Text>
             <View style={modalStyles.separator} />
-            <Text style={modalStyles.colLabel}>{state.opponentName.split(' ')[0]}</Text>
+            <Text style={modalStyles.colLabel}>
+              {isDoubles ? 'Pareja B' : state.opponentName.split(' ')[0]}
+            </Text>
           </View>
 
           <View style={modalStyles.setsContainer}>
@@ -334,7 +397,13 @@ function ConfirmResultModal({ state, myId, onClose, onResolved }: {
 
   const scoreStr = state.score?.sets?.map((s: any) => `${s.p1}–${s.p2}`).join('  ') ?? '—';
   const winnerId = state.score?.winner_id;
-  const iWon = winnerId === myId;
+  const isDoubles = state.matchFormat === 'doubles';
+  const iWon = winnerId === (state.myHeaderId ?? myId);
+  const winnerName = isDoubles
+    ? winnerId === state.side1HeaderId ? 'Pareja A'
+      : winnerId === state.side2HeaderId ? 'Pareja B'
+        : '—'
+    : state.submitterName.split(' ')[0];
 
   const handleConfirm = async () => {
     setLoading(true);
@@ -377,7 +446,7 @@ function ConfirmResultModal({ state, myId, onClose, onResolved }: {
           <View style={modalStyles.handle} />
           <Text style={modalStyles.title}>Confirmar Resultado</Text>
           <Text style={modalStyles.subtitle}>
-            {state.submitterName.split(' ')[0]} cargó el siguiente resultado:
+            {isDoubles ? state.submitterName : state.submitterName.split(' ')[0]} cargó el siguiente resultado:
           </Text>
 
           <View style={confirmStyles.scoreCard}>
@@ -385,7 +454,7 @@ function ConfirmResultModal({ state, myId, onClose, onResolved }: {
             <View style={[confirmStyles.winnerBadge, iWon ? confirmStyles.winnerBadgeGreen : confirmStyles.winnerBadgeRed]}>
               <Ionicons name="trophy" size={13} color={iWon ? Colors.primary : Colors.error} />
               <Text style={[confirmStyles.winnerBadgeText, iWon ? confirmStyles.winnerTextGreen : confirmStyles.winnerTextRed]}>
-                {iWon ? 'Vos ganaste' : `Ganó ${state.submitterName.split(' ')[0]}`}
+                {iWon ? (isDoubles ? 'Ganó tu pareja' : 'Vos ganaste') : `Ganó ${winnerName}`}
               </Text>
             </View>
           </View>
@@ -448,12 +517,14 @@ function ConfirmResultModal({ state, myId, onClose, onResolved }: {
 const TABS = ['Próximos', 'Historial', 'Retos'];
 
 const matchQuery = `
-    id, type, status, scheduled_at, location, score, notes,
-    player1_id, player2_id, created_by,
+    id, type, match_format, status, scheduled_at, location, score, notes,
+    player1_id, player2_id, partner1_id, partner2_id, team1_id, team2_id, created_by,
     submitted_by, played_at, confirmed_by, confirmed_at,
     disputed_by, dispute_reason, elo_delta_p1, elo_delta_p2,
     player1:profiles!matches_player1_id_fkey(id, full_name, avatar_url),
-    player2:profiles!matches_player2_id_fkey(id, full_name, avatar_url)
+    player2:profiles!matches_player2_id_fkey(id, full_name, avatar_url),
+    partner1:profiles!matches_partner1_id_fkey(id, full_name, avatar_url),
+    partner2:profiles!matches_partner2_id_fkey(id, full_name, avatar_url)
 `;
 
 export default function MatchesScreen() {
@@ -482,13 +553,15 @@ export default function MatchesScreen() {
 
   const loadData = async () => {
     if (!profile) return;
+    const myMatchFilter = `player1_id.eq.${profile.id},player2_id.eq.${profile.id},` +
+      `partner1_id.eq.${profile.id},partner2_id.eq.${profile.id}`;
     const [{ data: u }, { data: h }, { data: c }] = await Promise.all([
       supabase.from('matches').select(matchQuery)
-        .or(`player1_id.eq.${profile.id},player2_id.eq.${profile.id}`)
+        .or(myMatchFilter)
         .in('status', ['pending', 'confirmed', 'in_progress'])
         .order('scheduled_at', { ascending: true }),
       supabase.from('matches').select(matchQuery)
-        .or(`player1_id.eq.${profile.id},player2_id.eq.${profile.id}`)
+        .or(myMatchFilter)
         .eq('status', 'completed')
         .order('played_at', { ascending: false })
         .limit(20),
@@ -526,7 +599,10 @@ export default function MatchesScreen() {
   };
 
   const getOpponent = (m: any) => m.player1_id === profile?.id ? m.player2 : m.player1;
-  const getResult = (m: any) => m.score?.winner_id === profile?.id ? 'VICTORIA' : 'DERROTA';
+  const getResult = (m: any) => {
+    const myHeaderId = getSides(m, profile?.id ?? '').mine.headerId ?? profile?.id;
+    return m.score?.winner_id === myHeaderId ? 'VICTORIA' : 'DERROTA';
+  };
 
   const openChat = async (opponentId: string) => {
     if (!profile?.id) return;
@@ -537,12 +613,39 @@ export default function MatchesScreen() {
     else showAlert('Error', 'No se pudo abrir el chat.');
   };
 
+  const openTeamChat = async (teamId: string) => {
+    setLoadingId(`team-chat-${teamId}`);
+    try {
+      const convId = await getOrCreateDoublesChat(teamId);
+      router.push(`/chat/${convId}` as any);
+    } catch (e) {
+      showAlert('Error', e instanceof Error ? e.message : 'No se pudo abrir el chat de la dupla.');
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
   const confirmMatch = async (matchId: string) => {
     setLoadingId(matchId);
     const { error } = await supabase.from('matches').update({ status: 'confirmed' }).eq('id', matchId);
     setLoadingId(null);
     if (error) showAlert('Error', 'No se pudo confirmar el partido.');
     else loadData();
+  };
+
+  const handleKeepTeam = async (teamId: string, matchId: string) => {
+    setLoadingId(`keep-${matchId}`);
+    try {
+      const kept = await keepDoublesTeam(teamId);
+      showAlert(
+        kept ? 'Dupla conservada' : 'Esperando a tu compañero',
+        kept ? 'Sigan jugando juntos.' : 'Tu compañero todavía no aceptó conservar la dupla.'
+      );
+    } catch (e: any) {
+      showAlert('No se pudo conservar la dupla', e.message ?? 'Intentá de nuevo.');
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   const cancelMatch = (matchId: string) => {
@@ -552,9 +655,10 @@ export default function MatchesScreen() {
         text: 'Sí, rechazar', style: 'destructive',
         onPress: async () => {
           setLoadingId(matchId);
-          await supabase.from('matches').update({ status: 'cancelled' }).eq('id', matchId);
+          const { error } = await supabase.from('matches').update({ status: 'cancelled' }).eq('id', matchId);
           setLoadingId(null);
-          loadData();
+          if (error) showAlert('Error', 'No se pudo rechazar el partido.');
+          else { showAlert('Listo', 'Partido rechazado.'); loadData(); }
         },
       },
     ]);
@@ -596,9 +700,10 @@ export default function MatchesScreen() {
         text: 'Sí, rechazar', style: 'destructive',
         onPress: async () => {
           setLoadingId(challengeId);
-          await supabase.from('challenges').update({ status: 'rejected' }).eq('id', challengeId);
+          const { error } = await supabase.from('challenges').update({ status: 'rejected' }).eq('id', challengeId);
           setLoadingId(null);
-          loadData();
+          if (error) showAlert('Error', 'No se pudo rechazar el reto.');
+          else { showAlert('Listo', 'Reto rechazado.'); loadData(); }
         },
       },
     ]);
@@ -608,15 +713,32 @@ export default function MatchesScreen() {
 
   const renderUpcoming = () => upcoming.map(m => {
     const opp = getOpponent(m);
+    const isDoubles = m.match_format === 'doubles';
+    const sides = getSides(m, profile?.id ?? '');
+    const rival = sides.rival;
+    const chatTarget = isDoubles ? rival.header : opp;
     const isLoading = loadingId === m.id;
-    const isChatLoading = loadingId === `chat-${opp?.id}`;
+    const isChatLoading = loadingId === `chat-${chatTarget?.id}`;
     const matchDay = isMatchDay(m.scheduled_at);
     const isPending = m.status === 'pending';
     const isConfirmed = m.status === 'confirmed';
     const isInProgress = m.status === 'in_progress';
-    const iSubmitted = isInProgress && m.submitted_by === profile?.id;
-    const rivalSubmitted = isInProgress && m.submitted_by !== profile?.id;
+    const iSubmitted = isInProgress && (
+      isDoubles
+        ? [sides.mine.headerId, sides.mine.partnerId].includes(m.submitted_by)
+        : m.submitted_by === profile?.id
+    );
+    const rivalSubmitted = isInProgress && !iSubmitted;
     const hasSchedule = !!m.scheduled_at;
+    const submitterSide = isDoubles
+      ? [sides.a.headerId, sides.a.partnerId].includes(m.submitted_by) ? sides.a : sides.b
+      : null;
+    const submitterLabel = submitterSide?.label ?? opp?.full_name ?? 'Rival';
+    const scoreWinnerLabel = isDoubles
+      ? m.score?.winner_id === sides.a.headerId ? 'Ganó Pareja A'
+        : m.score?.winner_id === sides.b.headerId ? 'Ganó Pareja B'
+          : '—'
+      : m.score?.winner_id === profile?.id ? 'Ganaste' : `Ganó ${opp?.full_name?.split(' ')[0]}`;
 
     return (
       <Card key={m.id} style={[styles.matchCard, rivalSubmitted && styles.matchCardHighlight]}>
@@ -667,17 +789,40 @@ export default function MatchesScreen() {
           </View>
         )}
 
-        <View style={styles.matchVs}>
-          <View style={styles.matchPlayer}>
-            <Avatar uri={profile?.avatar_url} size={48} />
-            <Text style={styles.playerName}>Tú</Text>
+        {isDoubles ? (
+          <View style={styles.doublesVs}>
+            {[sides.a, sides.b].map((side, sideIndex) => (
+              <React.Fragment key={side.label}>
+                {sideIndex === 1 && <Text style={styles.vsText}>VS</Text>}
+                <View style={styles.doublesSide}>
+                  <Text style={[styles.doublesSideLabel, side.isMine && styles.doublesSideLabelMine]}>
+                    {side.label}{side.isMine ? ' (vos)' : ''}
+                  </Text>
+                  {side.players.map((p, playerIndex) => (
+                    <View key={`${side.label}-${playerIndex}`} style={styles.doublesPlayer}>
+                      <Avatar uri={p?.avatar_url} size={36} />
+                      <Text style={styles.doublesPlayerName} numberOfLines={1}>
+                        {p?.full_name ?? '?'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </React.Fragment>
+            ))}
           </View>
-          <Text style={styles.vsText}>VS</Text>
-          <View style={styles.matchPlayer}>
-            <Avatar uri={opp?.avatar_url} size={48} />
-            <Text style={styles.playerName}>{opp?.full_name ?? '?'}</Text>
+        ) : (
+          <View style={styles.matchVs}>
+            <View style={styles.matchPlayer}>
+              <Avatar uri={profile?.avatar_url} size={48} />
+              <Text style={styles.playerName}>Tú</Text>
+            </View>
+            <Text style={styles.vsText}>VS</Text>
+            <View style={styles.matchPlayer}>
+              <Avatar uri={opp?.avatar_url} size={48} />
+              <Text style={styles.playerName}>{opp?.full_name ?? '?'}</Text>
+            </View>
           </View>
-        </View>
+        )}
 
         {isPending && (
           <View style={styles.btnRow}>
@@ -689,20 +834,39 @@ export default function MatchesScreen() {
         )}
 
         {isConfirmed && (
-          <View style={styles.btnRow}>
-            <TouchableOpacity style={styles.iconBtn}
-              onPress={() => opp?.id && openChat(opp.id)} disabled={isChatLoading}>
-              {isChatLoading
-                ? <ActivityIndicator size="small" color={Colors.primary} />
-                : <Ionicons name="chatbubble-outline" size={18} color={Colors.primary} />}
-              <Text style={styles.iconBtnText}>Mensaje</Text>
-            </TouchableOpacity>
+          <View style={styles.btnStack}>
+            <View style={styles.btnRow}>
+              <TouchableOpacity style={styles.iconBtn}
+                onPress={() => chatTarget?.id && openChat(chatTarget.id)} disabled={isChatLoading}>
+                {isChatLoading
+                  ? <ActivityIndicator size="small" color={Colors.primary} />
+                  : <Ionicons name="chatbubble-outline" size={18} color={Colors.primary} />}
+                <Text style={styles.iconBtnText}>Mensaje</Text>
+              </TouchableOpacity>
+              {isDoubles && sides.mine.teamId && (
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={() => openTeamChat(sides.mine.teamId as string)}
+                  disabled={loadingId === `team-chat-${sides.mine.teamId}`}
+                >
+                  {loadingId === `team-chat-${sides.mine.teamId}`
+                    ? <ActivityIndicator size="small" color={Colors.primary} />
+                    : <Ionicons name="people-outline" size={18} color={Colors.primary} />}
+                  <Text style={styles.iconBtnText}>Chat dupla</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             {matchDay && (
               <TouchableOpacity
-                style={[styles.iconBtn, styles.iconBtnPrimary]}
+                style={[styles.iconBtn, styles.iconBtnPrimaryFull]}
                 onPress={() => setResultModal({
                   visible: true, matchId: m.id,
-                  opponentId: opp?.id ?? '', opponentName: opp?.full_name ?? 'Rival',
+                  opponentId: (isDoubles ? rival.headerId : opp?.id) ?? '',
+                  opponentName: (isDoubles ? rival.label : opp?.full_name) ?? 'Rival',
+                  matchFormat: isDoubles ? 'doubles' : 'singles',
+                  myHeaderId: sides.mine.headerId ?? profile?.id ?? '',
+                  side1HeaderId: sides.a.headerId ?? '',
+                  side2HeaderId: sides.b.headerId ?? '',
                 })}
               >
                 <Ionicons name="trophy-outline" size={18} color="#fff" />
@@ -717,7 +881,7 @@ export default function MatchesScreen() {
             <Ionicons name="time-outline" size={16} color="#856404" />
             <View style={{ flex: 1 }}>
               <Text style={styles.waitingText}>
-                Esperando que {opp?.full_name?.split(' ')[0] ?? 'tu rival'} confirme
+                Esperando que {isDoubles ? rival.label : (opp?.full_name?.split(' ')[0] ?? 'tu rival')} confirme
               </Text>
               <Text style={styles.waitingScore}>
                 {m.score?.sets?.map((s: any) => `${s.p1}–${s.p2}`).join('  ')}
@@ -731,19 +895,23 @@ export default function MatchesScreen() {
             <View style={styles.confirmBannerTop}>
               <Ionicons name="alert-circle" size={18} color={Colors.primary} />
               <Text style={styles.confirmBannerTitle}>
-                {opp?.full_name?.split(' ')[0] ?? 'Tu rival'} cargó un resultado
+                {submitterLabel.split(' ')[0]} cargó un resultado
               </Text>
             </View>
             <Text style={styles.confirmBannerScore}>
               {m.score?.sets?.map((s: any) => `${s.p1}–${s.p2}`).join('  ')}
               {'   '}
-              {m.score?.winner_id === profile?.id ? 'Ganaste' : `Ganó ${opp?.full_name?.split(' ')[0]}`}
+              {scoreWinnerLabel}
             </Text>
             <View style={styles.btnRow}>
               <TouchableOpacity style={styles.disputeBtn}
                 onPress={() => setConfirmModal({
                   visible: true, matchId: m.id,
-                  score: m.score, submitterName: opp?.full_name ?? 'Rival',
+                  score: m.score, submitterName: submitterLabel,
+                  matchFormat: isDoubles ? 'doubles' : 'singles',
+                  myHeaderId: sides.mine.headerId ?? profile?.id ?? '',
+                  side1HeaderId: sides.a.headerId ?? '',
+                  side2HeaderId: sides.b.headerId ?? '',
                 })}>
                 <Ionicons name="alert-circle-outline" size={16} color={Colors.error} />
                 <Text style={styles.disputeBtnText}>Disputar</Text>
@@ -751,7 +919,11 @@ export default function MatchesScreen() {
               <TouchableOpacity style={styles.confirmBtn}
                 onPress={() => setConfirmModal({
                   visible: true, matchId: m.id,
-                  score: m.score, submitterName: opp?.full_name ?? 'Rival',
+                  score: m.score, submitterName: submitterLabel,
+                  matchFormat: isDoubles ? 'doubles' : 'singles',
+                  myHeaderId: sides.mine.headerId ?? profile?.id ?? '',
+                  side1HeaderId: sides.a.headerId ?? '',
+                  side2HeaderId: sides.b.headerId ?? '',
                 })}>
                 <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
                 <Text style={styles.confirmBtnText}>Confirmar</Text>
@@ -765,10 +937,82 @@ export default function MatchesScreen() {
 
   const renderHistory = () => history.map(m => {
     const opp = getOpponent(m);
+    const isDoubles = m.match_format === 'doubles';
+    const sides = getSides(m, profile?.id ?? '');
     const result = getResult(m);
     const isWin = result === 'VICTORIA';
     const scoreStr = m.score?.sets?.map((s: any) => `${s.p1}-${s.p2}`).join(', ') ?? '—';
-    const eloDelta = m.player1_id === profile?.id ? m.elo_delta_p1 : m.elo_delta_p2;
+    const eloDelta = sides.mine.headerId === m.player1_id ? m.elo_delta_p1 : m.elo_delta_p2;
+    const keepTeamId = isDoubles ? sides.mine.teamId : null;
+    const eloRow = eloDelta !== undefined && eloDelta !== 0 && (
+      <View style={styles.eloDeltaRow}>
+        <Ionicons
+          name={eloDelta > 0 ? 'arrow-up' : 'arrow-down'} size={12}
+          color={eloDelta > 0 ? '#4ade80' : '#f87171'}
+        />
+        <Text style={[styles.eloDelta, eloDelta > 0 ? styles.eloPos : styles.eloNeg]}>
+          {Math.abs(eloDelta)} ELO
+        </Text>
+      </View>
+    );
+    const resultBadge = (
+      <Badge
+        label={result}
+        color={isWin ? Colors.primaryContainer : '#FFE5E5'}
+        textColor={isWin ? Colors.primary : Colors.error}
+      />
+    );
+
+    if (isDoubles) {
+      return (
+        <Card key={m.id} style={styles.historyDoublesCard}>
+          <View style={styles.historyDoublesTeams}>
+            {[sides.a, sides.b].map((side, sideIndex) => (
+              <React.Fragment key={side.label}>
+                {sideIndex === 1 && <Text style={styles.vsText}>VS</Text>}
+                <View style={styles.doublesSide}>
+                  <Text style={[styles.doublesSideLabel, side.isMine && styles.doublesSideLabelMine]}>
+                    {side.label}{side.isMine ? ' (vos)' : ''}
+                  </Text>
+                  {side.players.map((p, playerIndex) => (
+                    <View key={`${side.label}-${playerIndex}`} style={styles.doublesPlayer}>
+                      <Avatar uri={p?.avatar_url} size={32} />
+                      <Text style={styles.doublesPlayerName} numberOfLines={1}>
+                        {p?.full_name ?? '?'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </React.Fragment>
+            ))}
+          </View>
+          <Text style={styles.historyMeta}>
+            {m.type} • {formatDate(m.played_at ?? m.scheduled_at)}
+          </Text>
+          <View style={styles.historyDoublesFooter}>
+            <View style={styles.historyRight}>
+              <Text style={styles.historyScore}>{scoreStr}</Text>
+              {resultBadge}
+              {eloRow}
+            </View>
+            {keepTeamId && (
+              <TouchableOpacity
+                style={styles.keepTeamBtn}
+                onPress={() => handleKeepTeam(keepTeamId, m.id)}
+                disabled={loadingId === `keep-${m.id}`}
+              >
+                {loadingId === `keep-${m.id}`
+                  ? <ActivityIndicator size="small" color={Colors.primary} />
+                  : <>
+                    <Ionicons name="people-outline" size={16} color={Colors.primary} />
+                    <Text style={styles.keepTeamText}>Conservar dupla</Text>
+                  </>}
+              </TouchableOpacity>
+            )}
+          </View>
+        </Card>
+      );
+    }
 
     return (
       <Card key={m.id} style={styles.historyCard}>
@@ -783,22 +1027,8 @@ export default function MatchesScreen() {
         </View>
         <View style={styles.historyRight}>
           <Text style={styles.historyScore}>{scoreStr}</Text>
-          <Badge
-            label={result}
-            color={isWin ? Colors.primaryContainer : '#FFE5E5'}
-            textColor={isWin ? Colors.primary : Colors.error}
-          />
-          {eloDelta !== undefined && eloDelta !== 0 && (
-            <View style={styles.eloDeltaRow}>
-              <Ionicons
-                name={eloDelta > 0 ? 'arrow-up' : 'arrow-down'} size={12}
-                color={eloDelta > 0 ? '#4ade80' : '#f87171'}
-              />
-              <Text style={[styles.eloDelta, eloDelta > 0 ? styles.eloPos : styles.eloNeg]}>
-                {Math.abs(eloDelta)} ELO
-              </Text>
-            </View>
-          )}
+          {resultBadge}
+          {eloRow}
         </View>
       </Card>
     );
@@ -975,14 +1205,32 @@ const styles = StyleSheet.create({
   matchPlayer: { alignItems: 'center', gap: 6, flex: 1 },
   playerName: { ...Typography.titleMd, color: Colors.onSurface },
   vsText: { ...Typography.labelLg, color: Colors.onSurfaceVariant },
-  btnRow: { flexDirection: 'row', gap: Spacing.sm },
+  doublesVs: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  doublesSide: { flex: 1, gap: 4 },
+  doublesSideLabel: { ...Typography.labelSm, color: Colors.onSurfaceVariant, textAlign: 'center' },
+  doublesSideLabelMine: { color: Colors.primary },
+  doublesPlayer: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 },
+  doublesPlayerName: { ...Typography.bodySm, color: Colors.onSurface, flexShrink: 1 },
+  historyDoublesCard: { gap: Spacing.sm },
+  historyDoublesTeams: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  historyDoublesFooter: {
+    flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: Spacing.md,
+  },
+  keepTeamBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: Radius.full, backgroundColor: Colors.primaryContainer,
+  },
+  keepTeamText: { ...Typography.labelMd, color: Colors.primary },
+  btnStack: { gap: Spacing.md },
+  btnRow: { flexDirection: 'row', gap: Spacing.md },
   iconBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 11, borderRadius: Radius.xl,
+    gap: 6, minHeight: 44, paddingVertical: 11, borderRadius: Radius.xl,
     backgroundColor: Colors.surfaceContainerLowest,
     borderWidth: 1, borderColor: Colors.surfaceContainerHigh,
   },
-  iconBtnPrimary: { flex: 2, backgroundColor: Colors.primary, borderColor: Colors.primary },
+  iconBtnPrimaryFull: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   iconBtnText: { ...Typography.labelMd, color: Colors.primary },
   waitingBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
