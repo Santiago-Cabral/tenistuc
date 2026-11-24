@@ -40,7 +40,7 @@ npx tsc --noEmit   # verificación de tipos
 ## PWA / iOS
 
 - `public/manifest.json`: `display: standalone`, `start_url: /`, `theme_color` `#2D6A4F`, iconos `any` y `maskable`.
-- Íconos generados desde `public/icon-transparent.png` (logo sin fondo): `icon-192.png` e `icon-512.png` transparentes para favicon/manifiesto; `apple-touch-icon.png` con círculo verde; `icon-maskable-512.png` para Android.
+- Íconos generados desde `public/icon-transparent.png` (logo sin fondo con recorte circular del 50%): `icon-192.png` e `icon-512.png` transparentes para favicon/manifiesto; `apple-touch-icon.png` con círculo verde; `icon-maskable-512.png` para Android.
 - El favicon se declara como PNG transparente en `public/index.html` y `app/+html.tsx` (`/icon-192.png`), sin ICO con fondo.
 - Splashes: `splash-1125x2436.png`, `splash-1170x2532.png`, `splash-1179x2556.png`, `splash-1242x2688.png`, `splash-1290x2796.png`.
 - `InstallPrompt.web.tsx` muestra una vez el aviso “Compartir → Agregar a pantalla de inicio” en iOS Safari no standalone; se descarta guardando `tenistuc:install-dismissed` en localStorage.
@@ -48,7 +48,7 @@ npx tsc --noEmit   # verificación de tipos
 
 ## Service worker
 
-- `public/sw.js` (`tenistuc-shell-v2`) cachea solo el shell y archivos del mismo origen: `/`, `/index.html`, `/pwa.css`, `/pwa.js`, `/manifest.json`, íconos y `_expo/`.
+- `public/sw.js` (`tenistuc-shell-v3`) cachea solo el shell y archivos del mismo origen: `/`, `/index.html`, `/pwa.css`, `/pwa.js`, `/manifest.json`, íconos y `_expo/`.
 - Navegación: network-first con fallback a `/index.html`.
 - Assets: cache-first; Supabase y dominios externos nunca se cachean.
 - Registro: solo en `Platform.OS === 'web' && process.env.NODE_ENV === 'production'` desde `app/_layout.tsx`.

@@ -1,4 +1,4 @@
-const CACHE = 'tenistuc-shell-v2';
+const CACHE = 'tenistuc-shell-v3';
 const SHELL = [
   '/',
   '/index.html',

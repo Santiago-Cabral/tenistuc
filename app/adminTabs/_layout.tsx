@@ -19,8 +19,8 @@ export default function AdminTabsLayout() {
                     paddingBottom: isWeb ? 24 : insets.bottom + 4,
                     paddingTop: 8,
                 },
-                tabBarLabelStyle: isWeb ? { fontSize: 10, marginTop: 2 } : undefined,
-                tabBarItemStyle: isWeb ? { paddingHorizontal: 2 } : undefined,
+                tabBarLabelStyle: isWeb ? { fontSize: 9, marginTop: 1 } : undefined,
+                tabBarItemStyle: isWeb ? { paddingHorizontal: 0 } : undefined,
             }}
         >
             <Tabs.Screen

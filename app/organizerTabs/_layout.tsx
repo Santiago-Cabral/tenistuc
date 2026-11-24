@@ -21,8 +21,8 @@ export default function OrganizerTabsLayout() {
                     paddingBottom: isWeb ? 24 : insets.bottom + 4,
                     paddingTop: 8,
                 },
-                tabBarLabelStyle: isWeb ? { fontSize: 10, marginTop: 2 } : undefined,
-                tabBarItemStyle: isWeb ? { paddingHorizontal: 2 } : undefined,
+                tabBarLabelStyle: isWeb ? { fontSize: 9, marginTop: 1 } : undefined,
+                tabBarItemStyle: isWeb ? { paddingHorizontal: 0 } : undefined,
             }}
         >
             <Tabs.Screen
@@ -56,6 +56,7 @@ export default function OrganizerTabsLayout() {
                 name="payments"
                 options={{
                     title: "Jugadores",
+                    tabBarLabel: isWeb ? "Jugador" : "Jugadores",
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="people-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
                     ),
@@ -65,6 +66,7 @@ export default function OrganizerTabsLayout() {
                 name="messages"
                 options={{
                     title: "Mensajes",
+                    tabBarLabel: isWeb ? "Chats" : "Mensajes",
                     tabBarIcon: ({ color, size }) => (
                         <View>
                             <Ionicons name="chatbubbles-outline" color={typeof color === 'string' ? color : Colors.onSurfaceVariant} size={size} />
