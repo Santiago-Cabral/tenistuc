@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '../ui/DateTimeField';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import { useChallenges } from '../../hooks/useChallenges';

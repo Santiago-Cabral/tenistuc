@@ -8,8 +8,7 @@ import { showAlert } from '../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import { pickImage, readImageBytes } from '../src/services/imageUpload';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../src/theme/index';
 import { AgeCategoryField, InputField, Button, Chip } from '../src/components/ui';
@@ -63,40 +62,20 @@ export default function EditProfileScreen() {
     // ── Subir foto ────────────────────────────────────────────────────────────
 
     const pickAndUploadPhoto = async () => {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-            showAlert(
-                'Permiso requerido',
-                'Necesitamos acceso a tu galería para cambiar la foto.'
-            );
-            return;
-        }
+        const picked = await pickImage({ aspect: [1, 1], quality: 0.7 });
+        if (!picked) return;
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.7,
-        });
-
-        if (result.canceled || !result.assets[0]) return;
-
-        const asset = result.assets[0];
         setUploadingPhoto(true);
 
         try {
-            const ext = (asset.uri.split('.').pop() ?? 'jpg').toLowerCase();
-            const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+            const ext = picked.mimeType === 'image/png' ? 'png' : 'jpg';
             const path = `${profile!.id}/avatar.${ext}`;
-
-            // Leer como bytes directamente (Nuevo API de SDK 52+)
-            const file = new FileSystem.File(asset.uri);
-            const bytes = await file.bytes();
+            const bytes = await readImageBytes(picked.uri);
 
             const { error: uploadError } = await supabase.storage
                 .from('avatars')
-                .upload(path, bytes.buffer, {
-                    contentType: mime,
+                .upload(path, bytes, {
+                    contentType: picked.mimeType,
                     upsert: true,
                 });
 

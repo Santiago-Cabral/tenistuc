@@ -13,7 +13,7 @@ import {
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
 } from "@expo-google-fonts/plus-jakarta-sans";
-import { View, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Colors } from "../src/theme";
 import { useNotifications } from "../src/hooks/useNotifications";
@@ -23,6 +23,8 @@ import { useDynamicNotificationFeed } from "../src/hooks/useDynamicNotificationF
 import { DynamicNotifications, PALETTE } from "../src/dynamic-notifications";
 import { AppAlertHost } from "../src/services/appAlert";
 import { ensureNotificationPermission } from "../src/notifications/notificationService";
+import { watchWebSessionLoss } from "../src/services/webSessionNotice";
+import InstallPrompt from "../src/components/pwa/InstallPrompt";
 
 export default function RootLayout() {
     const { initialize, initialized, session, profile } = useAuthStore();
@@ -49,6 +51,13 @@ export default function RootLayout() {
     // Pedir permiso de notificaciones apenas abre la app (independiente del login)
     useEffect(() => {
         ensureNotificationPermission().catch(() => {});
+    }, []);
+
+    useEffect(() => watchWebSessionLoss(), []);
+
+    useEffect(() => {
+        if (Platform.OS !== 'web' || process.env.NODE_ENV !== 'production') return;
+        navigator.serviceWorker?.register('/sw.js').catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -118,6 +127,7 @@ function AppShell() {
         <>
             <Stack screenOptions={{ headerShown: false }} />
             <AppAlertHost />
+            <InstallPrompt />
         </>
     );
 }

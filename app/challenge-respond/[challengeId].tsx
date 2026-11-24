@@ -10,7 +10,7 @@ import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '../../src/components/ui/DateTimeField';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../src/theme/index';
 import { Avatar, Badge, Button } from '../../src/components/ui/index';
 import { useAuthStore } from '../../src/stores/authStore';

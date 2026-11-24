@@ -5,12 +5,11 @@ import {
     ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import { pickImage, readImageBytes } from '../../services/imageUpload';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker from '../ui/DateTimeField';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import { InputField } from '../ui/InputField';
 import { Button } from '../ui/Button';
@@ -176,35 +175,19 @@ export default function CreateTournamentModal({
     // ── Foto de portada ───────────────────────────────────────────────────────
 
     const pickCoverPhoto = async () => {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-            showAlert('Permiso requerido', 'Necesitamos acceso a tu galería para cambiar la portada.');
-            return;
-        }
+        const picked = await pickImage({ aspect: [16, 9], quality: 0.75 });
+        if (!picked) return;
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [16, 9],
-            quality: 0.75,
-        });
-
-        if (result.canceled || !result.assets[0]) return;
-
-        const asset = result.assets[0];
         setUploadingImage(true);
         try {
-            const ext = (asset.uri.split('.').pop() ?? 'jpg').toLowerCase();
-            const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+            const ext = picked.mimeType === 'image/png' ? 'png' : 'jpg';
             const path = `${organizerId}/cover-${Date.now()}.${ext}`;
-
-            const file = new FileSystem.File(asset.uri);
-            const bytes = await file.bytes();
+            const bytes = await readImageBytes(picked.uri);
 
             const { error: uploadError } = await supabase.storage
                 .from('tournament-images')
-                .upload(path, bytes.buffer, {
-                    contentType: mime,
+                .upload(path, bytes, {
+                    contentType: picked.mimeType,
                     upsert: true,
                 });
             if (uploadError) throw uploadError;

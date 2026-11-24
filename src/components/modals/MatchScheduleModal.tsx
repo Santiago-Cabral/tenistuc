@@ -7,7 +7,7 @@ import {
 import { showAlert } from '../../../src/services/appAlert';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '../ui/DateTimeField';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import { scheduleMatch } from '../../services/fixtureService';
 import { Court } from '../../services/organizerService';

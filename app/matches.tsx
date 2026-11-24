@@ -13,7 +13,7 @@ import { Avatar, Badge, Card, Button } from '../src/components/ui';
 import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/stores/authStore';
 import { useLiveRefresh } from '../src/hooks/useLiveRefresh';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '../src/components/ui/DateTimeField';
 
 interface SetScore { p1: number; p2: number; }
 interface ResultModalState {

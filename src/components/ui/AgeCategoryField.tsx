@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
     Modal, Platform, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from './DateTimeField';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing, Typography } from '../../theme';
 import {

@@ -1,0 +1,7 @@
+:root { color-scheme: light; }
+html, body { height: 100%; margin: 0; padding: 0; background: #F8FAF9; overscroll-behavior: none; -webkit-text-size-adjust: 100%; overflow: hidden; }
+body { font-family: 'PlusJakartaSans_400Regular', system-ui, sans-serif; }
+#root { display: flex; width: 100%; max-width: 480px; height: var(--app-height, 100dvh); flex: 1; margin: 0 auto; overflow: hidden; background: #F8FAF9; }
+input, textarea, select { font-size: 16px !important; }
+* { -webkit-tap-highlight-color: transparent; }
+button, [role="button"], a { touch-action: manipulation; user-select: none; -webkit-user-select: none; }

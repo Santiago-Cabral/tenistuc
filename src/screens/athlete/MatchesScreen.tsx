@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius } from '../../theme/index';
 import { Avatar, Badge, Card, Button } from '../../components/ui';
 import { useAuthStore } from '../../stores/authStore';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '../../components/ui/DateTimeField';
 import { MATCH_TYPE_LABELS, matchesService } from '../../services/matchService';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 

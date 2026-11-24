@@ -7,6 +7,12 @@
     "orientation": "portrait",
     "icon": "./logoverde.png",
     "userInterfaceStyle": "light",
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./logoverde.png",
+      "lang": "es"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tenistuc.app",

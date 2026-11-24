@@ -3,6 +3,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { presenceService } from '../services/presenceService';
 import { clearPushToken } from '../notifications/notificationService';
+import { markExplicitSignOut } from '../services/webSessionNotice';
 import type { Level } from '../constants/levels';
 import type { AgeCategory } from '../constants/ageCategories';
 
@@ -135,6 +136,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             // a un dispositivo que ya no usa.
             clearPushToken(profile.id).catch(() => {});
         }
+        markExplicitSignOut();
         await supabase.auth.signOut();
         set({ session: null, profile: null, authError: null });
     },
@@ -211,6 +213,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (profile?.id) {
             presenceService.markOffline(profile.id).catch(() => {});
         }
+        markExplicitSignOut();
         await supabase.auth.signOut();
         set({ session: null, profile: null, authError: null });
     },
