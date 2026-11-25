@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { UserRole } from '../stores/authStore';
 import type { Level } from '../constants/levels';
 import type { AgeCategory } from '../constants/ageCategories';
+import type { TournamentStatus } from './organizerService';
 
 const USER_COLUMNS =
     'id, username, full_name, avatar_url, role, city, club, elo, level, age_category, gender, bio, wins, losses, created_at';
@@ -12,7 +13,7 @@ const TOURNAMENT_COLUMNS =
 export type AdminGender = 'femenino' | 'masculino' | 'otro';
 export type AdminTournamentGender = 'todos' | 'femenino' | 'masculino';
 export type AdminTournamentLevel = 'todas' | Level;
-export type AdminTournamentStatus = 'upcoming' | 'open' | 'closed' | 'in_progress' | 'completed';
+export type AdminTournamentStatus = TournamentStatus;
 
 export interface AdminUser {
     id: string;

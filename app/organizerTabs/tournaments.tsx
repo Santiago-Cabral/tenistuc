@@ -2,7 +2,7 @@
 import React, { useCallback, useState } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, StyleSheet,
-    ActivityIndicator, RefreshControl, Alert,
+    ActivityIndicator, RefreshControl, Modal, Pressable,
 } from 'react-native';
 import { showAlert } from '../../src/services/appAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,16 +12,26 @@ import { Colors, Spacing, Typography, Radius, Shadow } from '../../src/theme';
 import { useAuthStore } from '../../src/stores/authStore';
 import { supabase } from '../../src/lib/supabase';
 import {
-    getMyTournaments, deleteTournament, setTournamentListStatus, Tournament,
+    getMyTournaments, deleteTournament, setTournamentStatus,
+    TOURNAMENT_STATUSES, TOURNAMENT_STATUS_LABEL, TOURNAMENT_STATUS_HINT,
+    Tournament, TournamentStatus,
 } from '../../src/services/organizerService';
 import { notifyUser } from '../../src/services/notificationService';
 import CreateTournamentModal from '../../src/components/modals/CreateTournamentModal';
 
-function statusInfo(status: string) {
-    if (status === 'open') return { label: 'Inscripciones abiertas', color: Colors.primary };
-    if (status === 'closed') return { label: 'Lista cerrada', color: Colors.tertiary };
-    if (status === 'in_progress') return { label: 'En curso', color: Colors.tertiary };
-    return { label: 'Finalizado', color: Colors.onSurfaceVariant };
+const STATUS_COLOR: Record<TournamentStatus, string> = {
+    upcoming: Colors.onSurfaceVariant,
+    open: Colors.primary,
+    closed: Colors.tertiary,
+    in_progress: Colors.tertiary,
+    completed: Colors.onSurfaceVariant,
+};
+
+function statusInfo(status: TournamentStatus) {
+    return {
+        label: TOURNAMENT_STATUS_LABEL[status] ?? status,
+        color: STATUS_COLOR[status] ?? Colors.onSurfaceVariant,
+    };
 }
 
 export default function TournamentsScreen() {
@@ -32,6 +42,7 @@ export default function TournamentsScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [editing, setEditing] = useState<Tournament | null>(null);
+    const [statusEditing, setStatusEditing] = useState<Tournament | null>(null);
 
     const load = useCallback(async () => {
         if (!profile) return;
@@ -83,20 +94,21 @@ export default function TournamentsScreen() {
         );
     };
 
-    const handleToggleList = (t: Tournament) => {
-        const closing = t.status === 'open';
+    const handleChangeStatus = (t: Tournament, next: TournamentStatus) => {
+        setStatusEditing(null);
+        if (next === t.status) return;
+
         showAlert(
-            closing ? 'Cerrar lista' : 'Reabrir lista',
-            closing
-                ? `¿Cerrar la inscripción para "${t.name}"? Nadie más podrá inscribirse y se avisará a los inscriptos.`
-                : `¿Reabrir la inscripción para "${t.name}"?`,
+            'Cambiar estado',
+            `¿Pasar "${t.name}" a ${TOURNAMENT_STATUS_LABEL[next]}? Los jugadores verán el nuevo estado y se avisará a los inscriptos.`,
             [
                 { text: 'Cancelar', style: 'cancel' },
                 {
-                    text: closing ? 'Cerrar' : 'Reabrir',
+                    text: 'Confirmar',
                     onPress: async () => {
                         try {
-                            await setTournamentListStatus(t.id, closing ? 'closed' : 'open');
+                            await setTournamentStatus(t.id, next);
+                            showAlert('Estado actualizado', `${t.name} ahora está ${TOURNAMENT_STATUS_LABEL[next]}.`);
                             load();
                         } catch (e: any) {
                             showAlert('No se pudo actualizar', e.message ?? 'Intentá de nuevo');
@@ -184,21 +196,13 @@ export default function TournamentsScreen() {
                                 </View>
 
                                 <View style={styles.cardActions}>
-                                    {t.status === 'open' || t.status === 'closed' ? (
-                                        <TouchableOpacity
-                                            style={styles.actionBtn}
-                                            onPress={() => handleToggleList(t)}
-                                        >
-                                            <Ionicons
-                                                name={t.status === 'open' ? 'lock-closed-outline' : 'lock-open-outline'}
-                                                size={16}
-                                                color={Colors.primary}
-                                            />
-                                            <Text style={styles.actionBtnText}>
-                                                {t.status === 'open' ? 'Cerrar lista' : 'Reabrir'}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ) : null}
+                                    <TouchableOpacity
+                                        style={styles.actionBtn}
+                                        onPress={() => setStatusEditing(t)}
+                                    >
+                                        <Ionicons name="options-outline" size={16} color={Colors.primary} />
+                                        <Text style={styles.actionBtnText}>Estado</Text>
+                                    </TouchableOpacity>
                                     <TouchableOpacity
                                         style={styles.actionBtn}
                                         onPress={() => handleNotifyAll(t)}
@@ -255,6 +259,57 @@ export default function TournamentsScreen() {
                     }}
                 />
             )}
+
+            <Modal
+                visible={!!statusEditing}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setStatusEditing(null)}
+            >
+                <View style={styles.statusBackdrop}>
+                    <Pressable style={StyleSheet.absoluteFill} onPress={() => setStatusEditing(null)} />
+                    <View style={styles.statusCard}>
+                        <View style={styles.statusHeader}>
+                            <Text style={styles.statusTitle}>Estado del torneo</Text>
+                            <TouchableOpacity onPress={() => setStatusEditing(null)} hitSlop={8}>
+                                <Ionicons name="close" size={22} color={Colors.onSurfaceVariant} />
+                            </TouchableOpacity>
+                        </View>
+                        {statusEditing && (
+                            <>
+                                <Text style={styles.statusTournament} numberOfLines={1}>{statusEditing.name}</Text>
+                                <Text style={styles.statusNote}>
+                                    Los estados son los que ven los jugadores. Solo con Inscripciones abiertas se pueden anotar nuevos participantes.
+                                </Text>
+                                <View style={styles.statusOptions}>
+                                    {TOURNAMENT_STATUSES.map((status) => {
+                                        const active = statusEditing.status === status;
+                                        return (
+                                            <TouchableOpacity
+                                                key={status}
+                                                style={[styles.statusOption, active && styles.statusOptionActive]}
+                                                onPress={() => handleChangeStatus(statusEditing, status)}
+                                                activeOpacity={0.8}
+                                            >
+                                                <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR[status] }]} />
+                                                <View style={styles.statusOptionInfo}>
+                                                    <Text style={[styles.statusOptionLabel, active && styles.statusOptionLabelActive]}>
+                                                        {TOURNAMENT_STATUS_LABEL[status]}
+                                                    </Text>
+                                                    <Text style={styles.statusOptionHint}>{TOURNAMENT_STATUS_HINT[status]}</Text>
+                                                </View>
+                                                {active && (
+                                                    <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                                                )}
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        )}
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -293,7 +348,38 @@ const styles = StyleSheet.create({
     cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     cardMetaText: { ...Typography.bodySm, color: Colors.onSurfaceVariant, flex: 1 },
 
-    cardActions: { flexDirection: 'row', gap: Spacing.lg, marginTop: Spacing.sm, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.surfaceContainerHigh },
+    cardActions: {
+        flexDirection: 'row', flexWrap: 'wrap', columnGap: Spacing.lg, rowGap: Spacing.sm,
+        marginTop: Spacing.sm, paddingTop: Spacing.sm,
+        borderTopWidth: 1, borderTopColor: Colors.surfaceContainerHigh,
+    },
     actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     actionBtnText: { ...Typography.labelSm, color: Colors.primary },
+
+    statusBackdrop: {
+        flex: 1, backgroundColor: Colors.scrim,
+        alignItems: 'center', justifyContent: 'center', padding: Spacing.xl,
+    },
+    statusCard: {
+        width: '100%', maxWidth: 420, maxHeight: '85%',
+        backgroundColor: Colors.surfaceContainerLowest,
+        borderRadius: Radius.xl, padding: Spacing.xl, gap: Spacing.sm,
+        ...Shadow.float,
+    },
+    statusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    statusTitle: { ...Typography.titleLg, color: Colors.onSurface, fontFamily: 'Lexend_700Bold' },
+    statusTournament: { ...Typography.bodyMd, color: Colors.onSurfaceVariant },
+    statusNote: { ...Typography.bodySm, color: Colors.onSurfaceVariant, marginBottom: Spacing.sm },
+    statusOptions: { gap: Spacing.sm },
+    statusOption: {
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+        borderWidth: 1, borderColor: Colors.surfaceContainerHigh,
+        borderRadius: Radius.lg, padding: Spacing.base,
+    },
+    statusOptionActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryContainer },
+    statusDot: { width: 10, height: 10, borderRadius: 5 },
+    statusOptionInfo: { flex: 1, gap: 2 },
+    statusOptionLabel: { ...Typography.labelLg, color: Colors.onSurface },
+    statusOptionLabelActive: { color: Colors.primary },
+    statusOptionHint: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
 });

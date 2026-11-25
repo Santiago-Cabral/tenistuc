@@ -139,7 +139,7 @@ export default function HomeScreen() {
             supabase
                 .from('tournaments')
                 .select('id, name, status, image_url, prize_money, elo_points, starts_at, location')
-                .in('status', ['open', 'closed', 'in_progress'])
+                .in('status', ['upcoming', 'open', 'closed', 'in_progress'])
                 .order('created_at', { ascending: false })
                 .limit(6),
 

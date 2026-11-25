@@ -167,7 +167,7 @@ export default function FixtureScreen() {
             .from('tournaments')
             .select('id, name, status, champion_id, champion_elo, champion_elo_applied, champion:profiles!tournaments_champion_id_fkey(full_name)')
             .eq('organizer_id', profile.id)
-            .in('status', ['open', 'closed', 'in_progress', 'completed'])
+            .in('status', ['upcoming', 'open', 'closed', 'in_progress', 'completed'])
             .order('starts_at', { ascending: false });
 
         if (!error && data) {

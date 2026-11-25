@@ -80,8 +80,10 @@ async function handler(req: Request) {
     for (const athlete of athletes ?? []) {
       notifications.push({
         user_id: athlete.id,
-        title: 'Nuevo torneo disponible',
-        body: `Se abrió la inscripción: ${record.name}`,
+        title: record.status === 'open' ? 'Nuevo torneo disponible' : 'Nuevo torneo',
+        body: record.status === 'open'
+          ? `Se abrió la inscripción: ${record.name}`
+          : `Nuevo torneo: ${record.name}`,
         data: { type: 'tournament_new', tournament_id: record.id },
         type: 'tournament_new',
       })
@@ -133,6 +135,36 @@ async function handler(req: Request) {
         user_id: player_id,
         title: record.status === 'closed' ? 'Lista cerrada' : 'Lista reabierta',
         body: `Se ${action} ${record.name}`,
+        data: { type: 'tournament_update', tournament_id: record.id },
+        type: 'tournament_update',
+      })
+    }
+  }
+
+  // ── CAMBIO DE ESTADO (próximo / finalizado, etc.) ──────────────────────────
+  else if (
+    table === 'tournaments' &&
+    type === 'UPDATE' &&
+    old_record?.status !== record.status
+  ) {
+    const statusLabels: Record<string, string> = {
+      upcoming: 'próximamente',
+      open: 'inscripciones abiertas',
+      closed: 'lista cerrada',
+      in_progress: 'en juego',
+      completed: 'finalizado',
+    }
+
+    const { data: registrations } = await supabase
+      .from('tournament_registrations')
+      .select('player_id')
+      .eq('tournament_id', record.id)
+
+    for (const { player_id } of registrations ?? []) {
+      notifications.push({
+        user_id: player_id,
+        title: 'Estado del torneo',
+        body: `${record.name} ahora está ${statusLabels[record.status] ?? record.status}. Mirá el fixture para ver novedades.`,
         data: { type: 'tournament_update', tournament_id: record.id },
         type: 'tournament_update',
       })

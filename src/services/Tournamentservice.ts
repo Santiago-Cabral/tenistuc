@@ -1,9 +1,7 @@
 import { supabase } from '../lib/supabase';
-import { TournamentInput } from './organizerService';
+import { TournamentInput, TournamentStatus } from './organizerService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-export type TournamentStatus = 'open' | 'in_progress' | 'completed';
 
 export interface Tournament {
     location: string;

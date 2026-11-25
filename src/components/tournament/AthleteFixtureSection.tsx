@@ -191,6 +191,9 @@ export default function AthleteFixtureSection({ tournamentId, myPlayerId, reload
     return (
         <View style={styles.wrap}>
             <SectionHeader title="Fixture y fechas" />
+            <Text style={styles.publicNote}>
+                El cuadro es público: cualquier jugador puede ver los partidos, horarios y canchas.
+            </Text>
 
             {totalRounds === 0 ? (
                 <View style={styles.stateWrap}>
@@ -220,6 +223,7 @@ export default function AthleteFixtureSection({ tournamentId, myPlayerId, reload
 
 const styles = StyleSheet.create({
     wrap: { gap: Spacing.md },
+    publicNote: { ...Typography.bodySm, color: Colors.onSurfaceVariant, marginTop: -Spacing.sm },
     loader: { paddingVertical: Spacing.xl, alignItems: 'center' },
     stateWrap: {
         alignItems: 'center', gap: Spacing.sm,

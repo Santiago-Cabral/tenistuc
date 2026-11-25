@@ -202,8 +202,11 @@ begin
             perform public.send_push_direct(
                 v_row.id,
                 'tournament_new',
-                'Nuevo torneo disponible',
-                'Se abrió la inscripción: ' || coalesce(v_rec->>'name', ''),
+                case when v_rec->>'status' = 'open'
+                    then 'Nuevo torneo disponible' else 'Nuevo torneo' end,
+                case when v_rec->>'status' = 'open'
+                    then 'Se abrió la inscripción: ' || coalesce(v_rec->>'name', '')
+                    else 'Nuevo torneo: ' || coalesce(v_rec->>'name', '') end,
                 v_data,
                 v_id
             );
@@ -249,6 +252,32 @@ begin
                     v_row.player_id,
                     'tournament_update',
                     v_title,
+                    v_body,
+                    v_data,
+                    v_id
+                );
+            end loop;
+        elsif v_rec->>'status' is distinct from v_old->>'status' then
+            v_title := case v_rec->>'status'
+                when 'upcoming' then 'Próximamente'
+                when 'open' then 'Inscripciones abiertas'
+                when 'closed' then 'Lista cerrada'
+                when 'in_progress' then 'En juego'
+                when 'completed' then 'Finalizado'
+                else 'Estado del torneo'
+            end;
+            v_body := coalesce(v_rec->>'name', '') || ' ahora está ' || lower(v_title) || '. Mirá el fixture para ver novedades.';
+            v_data := jsonb_build_object('type', 'tournament_update', 'tournament_id', v_id);
+
+            for v_row in
+                select player_id
+                from public.tournament_registrations
+                where tournament_id = v_id
+            loop
+                perform public.send_push_direct(
+                    v_row.player_id,
+                    'tournament_update',
+                    'Estado del torneo',
                     v_body,
                     v_data,
                     v_id

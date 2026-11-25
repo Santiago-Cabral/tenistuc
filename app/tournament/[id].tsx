@@ -14,6 +14,9 @@ import { Badge, Avatar, Button, Card, SectionHeader } from '../../src/components
 import AthleteFixtureSection from '../../src/components/tournament/AthleteFixtureSection';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthStore } from '../../src/stores/authStore';
+import {
+    isRegistrationOpen, TOURNAMENT_STATUS_LABEL, TournamentStatus,
+} from '../../src/services/organizerService';
 
 export default function TournamentDetailScreen() {
     const router = useRouter();
@@ -75,8 +78,11 @@ export default function TournamentDetailScreen() {
 
     const handleJoin = async () => {
         if (!profile || !tournament) return;
-        if (tournament.status !== 'open') {
-            showAlert('Lista cerrada', 'La inscripción para este torneo está cerrada.');
+        if (!isRegistrationOpen(tournament.status)) {
+            showAlert(
+                'Inscripción no disponible',
+                `Este torneo está ${TOURNAMENT_STATUS_LABEL[tournament.status as TournamentStatus]?.toLowerCase() ?? 'cerrado'}.`,
+            );
             return;
         }
         if (!eligible) {
@@ -106,10 +112,6 @@ export default function TournamentDetailScreen() {
         }
     };
 
-    const statusLabel: Record<string, string> = {
-        upcoming: 'PRÓXIMAMENTE', open: 'INSCRIPCIONES ABIERTAS',
-        closed: 'LISTA CERRADA', in_progress: 'EN JUEGO', completed: 'FINALIZADO',
-    };
     const statusColor: Record<string, string> = {
         upcoming: Colors.surfaceContainerHigh, open: Colors.primaryContainer,
         closed: Colors.tertiaryContainer, in_progress: Colors.tertiaryContainer,
@@ -119,6 +121,13 @@ export default function TournamentDetailScreen() {
         upcoming: Colors.onSurfaceVariant, open: Colors.primary,
         closed: Colors.tertiary, in_progress: Colors.tertiary,
         completed: Colors.onSurfaceVariant,
+    };
+
+    const closedStatusMessage: Record<string, string> = {
+        upcoming: 'La inscripción todavía no abrió. Esperá a que el organizador la habilite.',
+        closed: 'Este torneo terminó de recibir inscripciones.',
+        in_progress: 'El torneo ya comenzó, no se aceptan inscripciones nuevas.',
+        completed: 'El torneo finalizó. Mirá el fixture y los resultados.',
     };
 
     if (!tournament) {
@@ -169,7 +178,7 @@ export default function TournamentDetailScreen() {
                     </TouchableOpacity>
                     <View style={styles.heroContent}>
                         <Badge
-                            label={statusLabel[tournament.status] ?? tournament.status.toUpperCase()}
+                            label={(TOURNAMENT_STATUS_LABEL[tournament.status as TournamentStatus] ?? tournament.status).toUpperCase()}
                             color={statusColor[tournament.status] ?? Colors.surfaceContainerHigh}
                             textColor={statusTextColor[tournament.status] ?? Colors.onSurfaceVariant}
                         />
@@ -297,14 +306,12 @@ export default function TournamentDetailScreen() {
                         </Card>
                     )}
 
-                    {/* Fixture: visible para jugadores habilitados (pago aceptado) */}
-                    {myRegistration?.payment_status === 'paid' && (
-                        <AthleteFixtureSection
-                            tournamentId={tournament.id}
-                            myPlayerId={profile?.id}
-                            reloadKey={fixtureKey}
-                        />
-                    )}
+                    {/* Fixture público: lo ve cualquiera, esté o no inscripto */}
+                    <AthleteFixtureSection
+                        tournamentId={tournament.id}
+                        myPlayerId={profile?.id}
+                        reloadKey={fixtureKey}
+                    />
 
                     {/* Participants */}
                     <SectionHeader title={`Participantes (${registrations.length})`} />
@@ -343,83 +350,77 @@ export default function TournamentDetailScreen() {
                     )}
 
                     {/* CTA */}
-                    {tournament.status === 'closed' && !myRegistration ? (
-                        <View style={styles.ctaSection}>
+                    <View style={styles.ctaSection}>
+                        {!isRegistrationOpen(tournament.status) && !myRegistration ? (
                             <Card style={styles.registeredCard}>
                                 <View style={styles.registeredIconWrap}>
                                     <Ionicons name="lock-closed" size={28} color={Colors.tertiary} />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={[styles.registeredTitle, { color: Colors.tertiary }]}>
-                                        Lista cerrada
+                                        {TOURNAMENT_STATUS_LABEL[tournament.status as TournamentStatus] ?? 'Inscripción cerrada'}
                                     </Text>
                                     <Text style={styles.registeredSub}>
-                                        Este torneo terminó de recibir inscripciones.
+                                        {closedStatusMessage[tournament.status] ?? 'No se aceptan inscripciones nuevas.'}
                                     </Text>
                                 </View>
                             </Card>
-                        </View>
-                    ) : tournament.status === 'open' || myRegistration ? (
-                        <View style={styles.ctaSection}>
-                            {myRegistration ? (
-                                <Card style={styles.registeredCard}>
-                                    <View style={styles.registeredIconWrap}>
-                                        <Ionicons
-                                            name={myRegistration.payment_status === 'paid' ? 'checkmark-circle' : 'time-outline'}
-                                            size={28}
-                                            color={myRegistration.payment_status === 'paid' ? Colors.primary : Colors.tertiary}
-                                        />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text
-                                            style={[
-                                                styles.registeredTitle,
-                                                myRegistration.payment_status !== 'paid' && { color: Colors.tertiary },
-                                            ]}
-                                        >
-                                            {myRegistration.payment_status === 'paid'
-                                                ? '¡Estás habilitado!'
-                                                : 'Inscripción pendiente'}
-                                        </Text>
-                                        <Text style={styles.registeredSub}>
-                                            {myRegistration.payment_status === 'paid'
-                                                ? 'El organizador confirmó tu lugar. Seguí el fixture y tus horarios en esta pantalla.'
-                                                : 'El organizador tiene que habilitar tu lugar.'}
-                                        </Text>
-                                    </View>
-                                </Card>
-                            ) : tournament.status === 'open' ? (
-                                !eligible ? (
-                                    <Card style={styles.registeredCard}>
-                                        <View style={[styles.registeredIconWrap, { backgroundColor: `${Colors.error}14` }]}>
-                                            <Ionicons name="lock-closed" size={28} color={Colors.error} />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={[styles.registeredTitle, { color: Colors.error }]}>
-                                                No disponible para vos
-                                            </Text>
-                                            <Text style={styles.registeredSub}>
-                                                {`Este torneo es ${notEligibleReason}.`}
-                                                {genderMissing ? ' Configurá tu género en tu perfil para poder inscribirte.' : ''}
-                                            </Text>
-                                        </View>
-                                    </Card>
-                                ) : (
-                                    <>
-                                        <Text style={styles.ctaNote}>
-                                            Quedan {Math.max((tournament.max_players ?? 0) - registrations.length, 0)} lugares disponibles
-                                        </Text>
-                                        <Button
-                                            label="INSCRIBIRSE"
-                                            onPress={handleJoin}
-                                            loading={joining}
-                                            uppercase={false}
-                                        />
-                                    </>
-                                )
-                            ) : null}
-                        </View>
-                    ) : null}
+                        ) : myRegistration ? (
+                            <Card style={styles.registeredCard}>
+                                <View style={styles.registeredIconWrap}>
+                                    <Ionicons
+                                        name={myRegistration.payment_status === 'paid' ? 'checkmark-circle' : 'time-outline'}
+                                        size={28}
+                                        color={myRegistration.payment_status === 'paid' ? Colors.primary : Colors.tertiary}
+                                    />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text
+                                        style={[
+                                            styles.registeredTitle,
+                                            myRegistration.payment_status !== 'paid' && { color: Colors.tertiary },
+                                        ]}
+                                    >
+                                        {myRegistration.payment_status === 'paid'
+                                            ? '¡Estás habilitado!'
+                                            : 'Inscripción pendiente'}
+                                    </Text>
+                                    <Text style={styles.registeredSub}>
+                                        {myRegistration.payment_status === 'paid'
+                                            ? 'El organizador confirmó tu lugar. Seguí el fixture y tus horarios en esta pantalla.'
+                                            : 'El organizador tiene que habilitar tu lugar.'}
+                                    </Text>
+                                </View>
+                            </Card>
+                        ) : !eligible ? (
+                            <Card style={styles.registeredCard}>
+                                <View style={[styles.registeredIconWrap, { backgroundColor: `${Colors.error}14` }]}>
+                                    <Ionicons name="lock-closed" size={28} color={Colors.error} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.registeredTitle, { color: Colors.error }]}>
+                                        No disponible para vos
+                                    </Text>
+                                    <Text style={styles.registeredSub}>
+                                        {`Este torneo es ${notEligibleReason}.`}
+                                        {genderMissing ? ' Configurá tu género en tu perfil para poder inscribirte.' : ''}
+                                    </Text>
+                                </View>
+                            </Card>
+                        ) : (
+                            <>
+                                <Text style={styles.ctaNote}>
+                                    Quedan {Math.max((tournament.max_players ?? 0) - registrations.length, 0)} lugares disponibles
+                                </Text>
+                                <Button
+                                    label="INSCRIBIRSE"
+                                    onPress={handleJoin}
+                                    loading={joining}
+                                    uppercase={false}
+                                />
+                            </>
+                        )}
+                    </View>
                 </View>
 
                 <View style={{ height: 100 }} />

@@ -13,11 +13,14 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { Colors, Spacing, Typography, Radius, Shadow } from '../../theme';
 import { Card, Badge, SkeletonList } from '../../components/ui';
+import {
+    TOURNAMENT_STATUS_LABEL, TournamentStatus,
+} from '../../services/organizerService';
 
 interface TournamentRow {
     id: string;
     name: string;
-    status: 'upcoming' | 'open' | 'in_progress' | 'completed';
+    status: TournamentStatus;
     image_url: string | null;
     prize_money: number;
     elo_points: number;
@@ -35,11 +38,12 @@ interface Registration {
 
 type Tab = 'open' | 'mine';
 
-const STATUS_LABEL: Record<string, string> = {
-    upcoming: 'Próximamente',
-    open: 'Inscripciones abiertas',
-    in_progress: 'En juego',
-    completed: 'Finalizado',
+const STATUS_BADGE: Record<TournamentStatus, { bg: string; fg: string }> = {
+    upcoming: { bg: Colors.surfaceContainerHigh, fg: Colors.onSurfaceVariant },
+    open: { bg: Colors.primaryContainer, fg: Colors.primary },
+    closed: { bg: Colors.tertiaryContainer, fg: Colors.tertiary },
+    in_progress: { bg: Colors.tertiaryContainer, fg: Colors.tertiary },
+    completed: { bg: Colors.surfaceContainerHigh, fg: Colors.onSurfaceVariant },
 };
 
 export default function PlayerTournamentsScreen() {
@@ -59,7 +63,7 @@ export default function PlayerTournamentsScreen() {
             supabase
                 .from('tournaments')
                 .select('id, name, status, image_url, prize_money, elo_points, entry_fee, max_players, starts_at, location')
-                .in('status', ['open', 'in_progress'])
+                .in('status', ['upcoming', 'open', 'closed', 'in_progress'])
                 .order('starts_at', { ascending: true }),
 
             supabase
@@ -128,9 +132,9 @@ export default function PlayerTournamentsScreen() {
             <View style={styles.tBody}>
                 <View style={styles.tTopRow}>
                     <Badge
-                        label={STATUS_LABEL[t.status]?.toUpperCase() ?? t.status.toUpperCase()}
-                        color={t.status === 'open' ? Colors.primaryContainer : Colors.tertiaryContainer}
-                        textColor={t.status === 'open' ? Colors.primary : Colors.tertiary}
+                        label={(TOURNAMENT_STATUS_LABEL[t.status] ?? t.status).toUpperCase()}
+                        color={STATUS_BADGE[t.status]?.bg ?? Colors.surfaceContainerHigh}
+                        textColor={STATUS_BADGE[t.status]?.fg ?? Colors.onSurfaceVariant}
                     />
                 </View>
 
@@ -237,7 +241,7 @@ export default function PlayerTournamentsScreen() {
                             />
                             <Text style={styles.emptyText}>
                                 {tab === 'open'
-                                    ? 'No hay torneos abiertos por ahora'
+                                    ? 'No hay torneos disponibles por ahora'
                                     : 'Todavía no estás inscripto en ningún torneo'}
                             </Text>
                             {tab === 'mine' && (
