@@ -48,6 +48,10 @@ export interface Tournament {
     image_url: string | null;
     prize_money: number;
     elo_points: number;
+    champion_id: string | null;
+    champion_match_id: string | null;
+    champion_elo: number;
+    champion_elo_applied: boolean;
     entry_fee: number;
     max_players: number | null;
     location: string | null;

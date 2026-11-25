@@ -22,6 +22,10 @@ interface TournamentOption {
     id: string;
     name: string;
     status: string;
+    champion_id: string | null;
+    champion_elo: number;
+    champion_elo_applied: boolean;
+    champion?: { full_name: string } | null;
 }
 
 function roundLabel(round: number, totalRounds: number) {
@@ -161,14 +165,18 @@ export default function FixtureScreen() {
 
         const { data, error } = await supabase
             .from('tournaments')
-            .select('id, name, status')
+            .select('id, name, status, champion_id, champion_elo, champion_elo_applied, champion:profiles!tournaments_champion_id_fkey(full_name)')
             .eq('organizer_id', profile.id)
             .in('status', ['open', 'closed', 'in_progress', 'completed'])
             .order('starts_at', { ascending: false });
 
         if (!error && data) {
-            setTournaments(data);
-            setSelectedTournament((prev) => prev ?? (data.length > 0 ? data[0] : null));
+            const mapped: TournamentOption[] = (data as any[]).map((t) => ({
+                ...t,
+                champion: Array.isArray(t.champion) ? t.champion[0] ?? null : t.champion ?? null,
+            }));
+            setTournaments(mapped);
+            setSelectedTournament((prev) => prev ?? (mapped.length > 0 ? mapped[0] : null));
         }
     }, [profile]);
 
@@ -269,6 +277,15 @@ export default function FixtureScreen() {
                     </TouchableOpacity>
                 ))}
             </ScrollView>
+
+            {selectedTournament?.champion_elo_applied && selectedTournament.champion?.full_name && (
+                <View style={styles.championBanner}>
+                    <Ionicons name="trophy" size={18} color={Colors.primary} />
+                    <Text style={styles.championBannerText}>
+                        Campeón: {selectedTournament.champion.full_name} · +{selectedTournament.champion_elo} pts acreditados
+                    </Text>
+                </View>
+            )}
 
             {loading ? (
                 <View style={styles.centered}>
@@ -379,6 +396,13 @@ const styles = StyleSheet.create({
     tournamentChipActive: { backgroundColor: Colors.primary },
     tournamentChipText: { ...Typography.labelSm, color: Colors.onSurfaceVariant },
     tournamentChipTextActive: { color: Colors.onPrimary },
+
+    championBanner: {
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+        marginHorizontal: Spacing.xl, marginBottom: Spacing.base,
+        padding: Spacing.base, borderRadius: Radius.lg, backgroundColor: Colors.primaryContainer,
+    },
+    championBannerText: { ...Typography.labelMd, color: Colors.primaryDim, flex: 1 },
 
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.base, paddingHorizontal: Spacing.xxxl },
     emptyText: { ...Typography.bodyMd, color: Colors.onSurfaceVariant, textAlign: 'center' },

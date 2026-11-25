@@ -26,6 +26,9 @@ export default function TournamentDetailScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [fixtureKey, setFixtureKey] = useState(0);
     const [showAllParticipants, setShowAllParticipants] = useState(false);
+    const championName = Array.isArray(tournament?.champion)
+        ? tournament.champion[0]?.full_name
+        : tournament?.champion?.full_name;
 
     const refreshMyRegistration = async () => {
         if (!profile || !id) return;
@@ -43,7 +46,7 @@ export default function TournamentDetailScreen() {
         const [tRes, regRes] = await Promise.all([
             supabase
                 .from('tournaments')
-                .select('*, organizer:profiles!tournaments_organizer_id_fkey(full_name, avatar_url)')
+                .select('*, organizer:profiles!tournaments_organizer_id_fkey(full_name, avatar_url), champion:profiles!tournaments_champion_id_fkey(full_name)')
                 .eq('id', id)
                 .single(),
             supabase
@@ -220,6 +223,17 @@ export default function TournamentDetailScreen() {
                             <Text style={styles.statLabel}>ENTRADA</Text>
                         </View>
                     </View>
+
+                    {tournament.champion_elo_applied && championName && (
+                        <Card style={styles.infoCard}>
+                            <View style={styles.championRow}>
+                                <Ionicons name="trophy" size={18} color={Colors.primary} />
+                                <Text style={styles.championText}>
+                                    Campeón: {championName} · +{tournament.champion_elo} pts acreditados
+                                </Text>
+                            </View>
+                        </Card>
+                    )}
 
                     {/* Info cards */}
                     <Card style={styles.infoCard}>
@@ -453,6 +467,8 @@ const styles = StyleSheet.create({
     statValue: { fontFamily: 'Lexend_700Bold', fontSize: 18, color: Colors.onSurface, letterSpacing: -0.3 },
     statLabel: { ...Typography.labelSm, color: Colors.onSurfaceVariant, fontSize: 9 },
     statDivider: { width: 1, backgroundColor: Colors.surfaceContainerHighest },
+    championRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    championText: { ...Typography.labelMd, color: Colors.primaryDim, flex: 1 },
     infoCard: { gap: Spacing.md },
     infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
     infoIconWrap: {
