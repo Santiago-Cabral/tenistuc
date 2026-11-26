@@ -29,7 +29,7 @@ export default function RegisterScreen() {
 
     const handleRegister = async () => {
         if (!consent) {
-            showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad para poder registrarte.');
+            showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad y los términos y condiciones para poder registrarte.');
             return;
         }
         if (!fullName || !username || !email || !password) {

@@ -50,7 +50,7 @@ export default function LoginScreen() {
 
     const handleGoogleSignIn = async () => {
         if (!consent) {
-            showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad para usar TucuPlay.');
+            showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad y los términos y condiciones para usar TucuPlay.');
             return;
         }
         setSocialLoading(true);
@@ -201,6 +201,16 @@ export default function LoginScreen() {
                             <Text style={styles.registerLink}>Registrate</Text>
                         </TouchableOpacity>
                     </View>
+
+                    <View style={styles.legalRow}>
+                        <TouchableOpacity onPress={() => router.push('/privacy-policy')}>
+                            <Text style={styles.legalLink}>Política de Privacidad</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.legalSep}> · </Text>
+                        <TouchableOpacity onPress={() => router.push('/terms')}>
+                            <Text style={styles.legalLink}>Términos y Condiciones</Text>
+                        </TouchableOpacity>
+                    </View>
                 </ScrollView>
             </SafeAreaView>
         </KeyboardAvoidingView>
@@ -329,5 +339,22 @@ const styles = StyleSheet.create({
         ...Typography.bodyMd,
         color: Colors.primary,
         fontFamily: 'PlusJakartaSans_700Bold',
+    },
+    legalRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        marginTop: Spacing.lg,
+        paddingVertical: Spacing.sm,
+    },
+    legalLink: {
+        ...Typography.bodySm,
+        color: Colors.primary,
+        fontFamily: 'PlusJakartaSans_600SemiBold',
+    },
+    legalSep: {
+        ...Typography.bodySm,
+        color: Colors.onSurfaceVariant,
     },
 });

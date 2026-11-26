@@ -74,7 +74,11 @@ export default function RootLayout() {
             seg0 === "forgot-password" ||
             seg0 === "auth";
 
-        if (!session && !inAuthScreens) {
+        const legalScreens =
+            seg0 === "privacy-policy" ||
+            seg0 === "terms";
+
+        if (!session && !inAuthScreens && !legalScreens) {
             router.replace("/login");
         }
 

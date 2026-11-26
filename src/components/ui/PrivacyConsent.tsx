@@ -40,11 +40,22 @@ export function PrivacyConsent({ checked, onChange, disabled }: Props) {
                     >
                         Política de Privacidad
                     </Text>
+                    {' y los '}
+                    <Text
+                        style={styles.link}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            router.push('/terms');
+                        }}
+                    >
+                        Términos y Condiciones
+                    </Text>
+                    {'.'}
                 </Text>
             </TouchableOpacity>
             {!checked && (
                 <Text style={styles.hint}>
-                    Es obligatorio aceptarla para poder usar TucuPlay.
+                    Es obligatorio aceptarlos para poder usar TucuPlay.
                 </Text>
             )}
         </View>

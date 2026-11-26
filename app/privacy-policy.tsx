@@ -112,6 +112,10 @@ export default function PrivacyPolicyScreen() {
                         ))}
                     </View>
                 ))}
+
+                <TouchableOpacity onPress={() => router.push('/terms')}>
+                    <Text style={styles.footerLink}>Ver los Términos y Condiciones</Text>
+                </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
     );
@@ -179,5 +183,11 @@ const styles = StyleSheet.create({
         ...Typography.bodyMd,
         color: Colors.onSurfaceVariant,
         lineHeight: 22,
+    },
+    footerLink: {
+        ...Typography.bodyMd,
+        color: Colors.primary,
+        fontFamily: 'PlusJakartaSans_700Bold',
+        marginTop: Spacing.sm,
     },
 });
