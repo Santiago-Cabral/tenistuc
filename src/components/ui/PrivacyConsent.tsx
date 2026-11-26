@@ -44,7 +44,7 @@ export function PrivacyConsent({ checked, onChange, disabled }: Props) {
             </TouchableOpacity>
             {!checked && (
                 <Text style={styles.hint}>
-                    Es obligatorio aceptarla para poder usar TenisTuc.
+                    Es obligatorio aceptarla para poder usar TucuPlay.
                 </Text>
             )}
         </View>

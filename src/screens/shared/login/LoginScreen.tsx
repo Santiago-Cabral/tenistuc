@@ -50,7 +50,7 @@ export default function LoginScreen() {
 
     const handleGoogleSignIn = async () => {
         if (!consent) {
-            showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad para usar TenisTuc.');
+            showAlert('Política de Privacidad', 'Debés aceptar la política de privacidad para usar TucuPlay.');
             return;
         }
         setSocialLoading(true);

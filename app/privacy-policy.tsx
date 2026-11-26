@@ -8,7 +8,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
     {
         title: '1. Responsable',
         body: [
-            'TenisTuc es una plataforma para la comunidad de tenis de Tucumán (Argentina). Al usar la aplicación gestionás y participás en torneos, organizás partidos entre jugadores y accedés a rankings.',
+            'TucuPlay es una plataforma para la comunidad de tenis de Tucumán (Argentina). Al usar la aplicación gestionás y participás en torneos, organizás partidos entre jugadores y accedés a rankings.',
         ],
     },
     {
@@ -32,7 +32,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
     {
         title: '4. Inscripciones a torneos',
         body: [
-            'La app no procesa pagos ni almacena datos de tarjetas. Cuando te inscribís a un torneo, el organizador habilita tu lugar manualmente y coordina con vos el pago de la inscripción por fuera de la aplicación (efectivo, transferencia u otro medio). TenisTuc sólo registra el estado de tu inscripción (pendiente o habilitada).',
+            'La app no procesa pagos ni almacena datos de tarjetas. Cuando te inscribís a un torneo, el organizador habilita tu lugar manualmente y coordina con vos el pago de la inscripción por fuera de la aplicación (efectivo, transferencia u otro medio). TucuPlay sólo registra el estado de tu inscripción (pendiente o habilitada).',
         ],
     },
     {
@@ -45,7 +45,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
         title: '6. Compartir con terceros',
         body: [
             'No vendemos ni alquilamos tus datos. Sólo los compartimos con:',
-            '• Otros usuarios de TenisTuc (perfil, resultados, ranking y mensajes).',
+            '• Otros usuarios de TucuPlay (perfil, resultados, ranking y mensajes).',
             '• Proveedores de servicio necesarios para el funcionamiento (Supabase, Expo/notificaciones push, Google y Apple si usás esa vía de ingreso).',
         ],
     },
@@ -64,13 +64,13 @@ const SECTIONS: { title: string; body: string[] }[] = [
     {
         title: '9. Cambios en esta política',
         body: [
-            'Podremos actualizar esta política de privacidad para reflejar cambios en el servicio o en la normativa. Cuando haya cambios relevantes, te lo haremos saber dentro de la aplicación. El uso continuado de TenisTuc luego de una actualización implica la aceptación de la nueva versión.',
+            'Podremos actualizar esta política de privacidad para reflejar cambios en el servicio o en la normativa. Cuando haya cambios relevantes, te lo haremos saber dentro de la aplicación. El uso continuado de TucuPlay luego de una actualización implica la aceptación de la nueva versión.',
         ],
     },
     {
         title: '10. Contacto',
         body: [
-            'Ante dudas sobre esta política o el tratamiento de tus datos personales, escribinos a soporte@tenistuc.com.ar indicando tu nombre de usuario y el motivo de tu consulta.',
+            'Ante dudas sobre esta política o el tratamiento de tus datos personales, escribinos a soporte@tucuplay.com indicando tu nombre de usuario y el motivo de tu consulta.',
         ],
     },
 ];
@@ -92,11 +92,11 @@ export default function PrivacyPolicyScreen() {
                 showsVerticalScrollIndicator={false}
             >
                 <Text style={styles.title}>Política de Privacidad</Text>
-                <Text style={styles.updated}>Última actualización: 16 de octubre de 2026</Text>
+                <Text style={styles.updated}>Última actualización: 26 de noviembre de 2026</Text>
 
                 <View style={styles.introCard}>
                     <Text style={styles.introText}>
-                        En TenisTuc respetamos tu privacidad. Esta política explica qué datos recopilamos,
+                        En TucuPlay respetamos tu privacidad. Esta política explica qué datos recopilamos,
                         cómo los usamos y los derechos que tenés sobre ellos. Al registrarte y usar la
                         aplicación aceptás los términos descriptos a continuación.
                     </Text>
