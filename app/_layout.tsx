@@ -129,7 +129,9 @@ function AppShell() {
 
     return (
         <>
-            <Stack screenOptions={{ headerShown: false }} />
+            <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="tutorial" options={{ headerShown: false }} />
+            </Stack>
             <AppAlertHost />
             <InstallPrompt />
         </>

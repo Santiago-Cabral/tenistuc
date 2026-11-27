@@ -11,7 +11,7 @@ import type { AgeCategory } from '../constants/ageCategories';
 // `expo_push_token`: esa columna está revocada para anon/authenticated
 // (el token push solo lo lee el servidor con service_role).
 const PROFILE_COLUMNS =
-    'id, username, full_name, avatar_url, role, city, club, elo, level, age_category, gender, wins, losses, play_style, bio, is_online, last_seen, privacy_consented_at, privacy_policy_version, created_at';
+    'id, username, full_name, avatar_url, role, city, club, elo, level, age_category, gender, wins, losses, play_style, bio, is_online, last_seen, privacy_consented_at, privacy_policy_version, has_seen_tutorial, created_at';
 
 export type UserRole = 'athlete' | 'organizer' | 'admin';
 
@@ -36,6 +36,7 @@ export interface Profile {
     last_seen: string;
     privacy_consented_at: string | null;
     privacy_policy_version: string | null;
+    has_seen_tutorial: boolean;
     created_at: string;
 }
 

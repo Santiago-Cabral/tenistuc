@@ -227,6 +227,21 @@ export default function ProfileScreen() {
                         </Card>
                     )}
 
+                    <TouchableOpacity
+                        onPress={() => router.push('/tutorial')}
+                        activeOpacity={0.7}
+                        style={styles.tutorialCard}
+                    >
+                        <View style={styles.betaIconWrap}>
+                            <Ionicons name="compass-outline" size={18} color={Colors.primary} />
+                        </View>
+                        <View style={styles.betaTextCol}>
+                            <Text style={styles.betaTitle}>Ver tutorial</Text>
+                            <Text style={styles.betaSub}>Volvé a ver la guía de la app</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={Colors.onSurfaceVariant} />
+                    </TouchableOpacity>
+
                     {/* ── Beta: comentarios ── */}
                     <TouchableOpacity
                         onPress={() => router.push('/beta-feedback' as any)}
@@ -495,6 +510,16 @@ const styles = StyleSheet.create({
     },
     pushInboxText: { ...Typography.bodyMd, color: Colors.onSurface, flex: 1 },
 
+    tutorialCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        backgroundColor: Colors.surfaceContainerLowest,
+        borderRadius: Radius.xl,
+        padding: Spacing.lg,
+        borderWidth: 1,
+        borderColor: Colors.surfaceContainerHigh,
+    },
     betaCard: {
         flexDirection: 'row',
         alignItems: 'center',

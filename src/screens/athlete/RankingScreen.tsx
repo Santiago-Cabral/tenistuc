@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius } from '../../theme';
-import { Avatar, Badge, Card, SkeletonList } from '../../components/ui';
+import { Avatar, Badge, Button, Card, SkeletonList } from '../../components/ui';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { ageCategoryLabel, type AgeCategory } from '../../constants/ageCategories';
@@ -521,21 +521,40 @@ export default function RankingScreen() {
                 }}
                 ListEmptyComponent={
                     <View style={styles.empty}>
-                        <Ionicons name="trophy-outline" size={48} color={Colors.onSurfaceVariant} />
-                        <Text style={styles.emptyText}>
-                            {view === 'teams'
-                                ? 'Todavía no hay duplas activas en el ranking'
-                                : hasFilters
-                                    ? `No hay jugadores en ${genderLabel} · ${levelLabel}`
-                                    : 'Todavía no hay jugadores en el ranking'}
-                        </Text>
-                        {view === 'players' && hasFilters && (
-                            <TouchableOpacity onPress={() => {
-                                setGenderFilter('all');
-                                setLevelFilter('all');
-                            }}>
-                                <Text style={styles.emptyAction}>Ver ranking general</Text>
-                            </TouchableOpacity>
+                        <Ionicons
+                            name={view === 'teams' ? 'people-outline' : 'trophy-outline'}
+                            size={48}
+                            color={Colors.onSurfaceVariant}
+                        />
+                        {view === 'teams' ? (
+                            <>
+                                <Text style={styles.emptyText}>
+                                    Todavía no hay duplas en el ranking
+                                </Text>
+                                <Text style={styles.emptyHint}>
+                                    Invitá a otro jugador a formar una dupla para aparecer acá y desafiar a otras parejas.
+                                </Text>
+                                <Button
+                                    label="Buscar compañero"
+                                    onPress={() => router.push('/athleteTabs/rivals' as any)}
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <Text style={styles.emptyText}>
+                                    {hasFilters
+                                        ? `No hay jugadores en ${genderLabel} · ${levelLabel}`
+                                        : 'Todavía no hay jugadores en el ranking'}
+                                </Text>
+                                {hasFilters && (
+                                    <TouchableOpacity onPress={() => {
+                                        setGenderFilter('all');
+                                        setLevelFilter('all');
+                                    }}>
+                                        <Text style={styles.emptyAction}>Ver ranking general</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </>
                         )}
                     </View>
                 }
@@ -615,5 +634,6 @@ const styles = StyleSheet.create({
     },
     empty: { alignItems: 'center', paddingTop: 80, gap: Spacing.md },
     emptyText: { ...Typography.bodyMd, color: Colors.onSurfaceVariant, textAlign: 'center', paddingHorizontal: Spacing.xl },
+    emptyHint: { ...Typography.bodySm, color: Colors.onSurfaceVariant, textAlign: 'center', paddingHorizontal: Spacing.xl },
     emptyAction: { ...Typography.labelLg, color: Colors.primary },
 });

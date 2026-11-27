@@ -523,6 +523,28 @@ export default function HomeScreen() {
                         )}
                     </Card>
 
+                    <SectionHeader
+                        title="Dobles"
+                        action="Abrir"
+                        onAction={() => router.push('/doubles' as any)}
+                    />
+                    <Card style={styles.matchCard}>
+                        <TouchableOpacity
+                            style={styles.doublesRow}
+                            onPress={() => router.push('/doubles' as any)}
+                            activeOpacity={0.85}
+                        >
+                            <View style={styles.doublesIconWrap}>
+                                <Ionicons name="people-outline" size={22} color={Colors.primary} />
+                            </View>
+                            <View style={styles.doublesInfo}>
+                                <Text style={styles.doublesTitle}>Jugá en pareja</Text>
+                                <Text style={styles.doublesSubtitle}>Invitaciones, duplas y desafíos</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={18} color={Colors.onSurfaceVariant} />
+                        </TouchableOpacity>
+                    </Card>
+
                     {/* ── Desafíos pendientes + Próximos partidos ── */}
                     <SectionHeader
                         title="Desafíos y partidos"
@@ -624,28 +646,6 @@ export default function HomeScreen() {
                         })}
                         </>
                     )}
-
-                    <SectionHeader
-                        title="Dobles"
-                        action="Abrir"
-                        onAction={() => router.push('/doubles' as any)}
-                    />
-                    <Card style={styles.matchCard}>
-                        <TouchableOpacity
-                            style={styles.doublesRow}
-                            onPress={() => router.push('/doubles' as any)}
-                            activeOpacity={0.85}
-                        >
-                            <View style={styles.doublesIconWrap}>
-                                <Ionicons name="people-outline" size={22} color={Colors.primary} />
-                            </View>
-                            <View style={styles.doublesInfo}>
-                                <Text style={styles.doublesTitle}>Jugá en pareja</Text>
-                                <Text style={styles.doublesSubtitle}>Invitaciones, duplas y desafíos</Text>
-                            </View>
-                            <Ionicons name="chevron-forward" size={18} color={Colors.onSurfaceVariant} />
-                        </TouchableOpacity>
-                    </Card>
 
                     {/* ── Torneos Activos ── */}
                     <SectionHeader

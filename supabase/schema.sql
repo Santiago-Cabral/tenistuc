@@ -93,6 +93,7 @@ create table if not exists public.profiles (
     expo_push_token   text,
     privacy_consented_at timestamptz,
     privacy_policy_version text,
+    has_seen_tutorial boolean not null default false,
     created_at        timestamptz not null default now()
 );
 

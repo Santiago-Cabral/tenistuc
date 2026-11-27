@@ -41,6 +41,10 @@ export default function Index() {
         return <Redirect href="/login" />;
     }
 
+    if (profile.role === 'athlete' && !profile.has_seen_tutorial) {
+        return <Redirect href="/tutorial" />;
+    }
+
     if (profile.role === 'admin') {
         return <Redirect href={'/adminTabs/dashboard' as any} />;
     }
