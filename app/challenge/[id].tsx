@@ -26,15 +26,8 @@ import { Card } from '../../src/components/ui/Card';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import { MATCH_TYPE_LABELS, affectsElo } from '../../src/services/matchService';
 import { isActuallyOnline } from '../../src/services/presenceService';
-
-const VENUES = [
-    'Lawn Tenis Club',
-    'Club Atlético San Martín',
-    'Tucumán Lawn Tennis',
-    'Club Universitario',
-    'Club Social Sportivo',
-    'Otro',
-];
+import { VenueChips } from '../../src/components/ui/VenueChips';
+import { CUSTOM_VENUE, normalizeVenue } from '../../src/constants/venues';
 
 const STATUS_CONFIG: Record<
     string,
@@ -175,6 +168,7 @@ export default function ChallengeDetailScreen() {
     const [reproposeVisible, setReproposeVisible] = useState(false);
     const [newDate, setNewDate] = useState('');
     const [newVenue, setNewVenue] = useState('');
+    const [customVenue, setCustomVenue] = useState('');
 
     const hasLoadedRef = useRef(false);
     const requestRef = useRef(0);
@@ -314,12 +308,15 @@ export default function ChallengeDetailScreen() {
 
     const openRepropose = () => {
         setNewDate(formatLocalDateTime(challenge.proposed_date));
-        setNewVenue(challenge.proposed_venue ?? '');
+        const venue = normalizeVenue(challenge.proposed_venue);
+        setNewVenue(venue ?? (challenge.proposed_venue && challenge.proposed_venue !== CUSTOM_VENUE ? CUSTOM_VENUE : ''));
+        setCustomVenue(venue || !challenge.proposed_venue || challenge.proposed_venue === CUSTOM_VENUE ? '' : challenge.proposed_venue);
         setReproposeVisible(true);
     };
 
     const handleRepropose = async () => {
-        if (!newDate || !newVenue) {
+        const venue = newVenue === CUSTOM_VENUE ? customVenue.trim() : newVenue;
+        if (!newDate || !venue) {
             showAlert('Falta info', 'Elegí fecha y sede');
             return;
         }
@@ -332,7 +329,7 @@ export default function ChallengeDetailScreen() {
         const ok = await reproposeChallenge({
             challengeId: challenge.id,
             proposedDate: iso,
-            proposedVenue: newVenue,
+            proposedVenue: venue,
         });
         setActionLoading(null);
         if (ok) {
@@ -569,27 +566,18 @@ export default function ChallengeDetailScreen() {
                         />
 
                         <Text style={styles.modalLabel}>Sede</Text>
-                        <View style={styles.venuesWrap}>
-                            {VENUES.map((v) => (
-                                <TouchableOpacity
-                                    key={v}
-                                    onPress={() => setNewVenue(v)}
-                                    style={[
-                                        styles.venueChip,
-                                        newVenue === v && styles.venueChipActive,
-                                    ]}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.venueChipText,
-                                            newVenue === v && styles.venueChipTextActive,
-                                        ]}
-                                    >
-                                        {v}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                        <ScrollView style={styles.venueScroll}>
+                            <VenueChips selected={newVenue || null} onSelect={setNewVenue} />
+                        </ScrollView>
+                        {newVenue === CUSTOM_VENUE && (
+                            <TextInput
+                                placeholder="Escribí el lugar..."
+                                placeholderTextColor={Colors.onSurfaceVariant}
+                                value={customVenue}
+                                onChangeText={setCustomVenue}
+                                style={styles.input}
+                            />
+                        )}
 
                         <View style={styles.modalActions}>
                             <Button
@@ -686,16 +674,6 @@ const styles = StyleSheet.create({
         color: Colors.onSurface,
         ...Typography.bodyMd,
     },
-    venuesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-    venueChip: {
-        paddingVertical: Spacing.sm,
-        paddingHorizontal: Spacing.base,
-        borderRadius: Radius.full,
-        borderWidth: 1,
-        borderColor: Colors.surfaceContainerHigh,
-    },
-    venueChipActive: { backgroundColor: Colors.primaryContainer, borderColor: Colors.primary },
-    venueChipText: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
-    venueChipTextActive: { color: Colors.primaryDim },
+    venueScroll: { maxHeight: 260 },
     modalActions: { flexDirection: 'row', gap: Spacing.base, marginTop: Spacing.base },
 });

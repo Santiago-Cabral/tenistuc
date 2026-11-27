@@ -64,7 +64,7 @@ begin
             p_team := v_my_team,
             p_target := v_pair_a,
             p_date := now() + interval '2 days',
-            p_venue := 'Lawn Tenis Club',
+            p_venue := 'Tucumán Lawn Tennis Club',
             p_message := 'Prueba: aceptá para ver el partido'
         ) into v_challenge;
 

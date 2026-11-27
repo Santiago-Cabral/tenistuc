@@ -17,15 +17,8 @@ import { useAuthStore } from '../../src/stores/authStore';
 import { useChallenges, Challenge } from '../../src/hooks/useChallenges';
 import { useLiveRefresh } from '../../src/hooks/useLiveRefresh';
 import { MATCH_TYPE_LABELS, affectsElo } from '../../src/services/matchService';
-
-const VENUES = [
-    'Lawn Tenis Club',
-    'Club Atlético San Martín',
-    'Tucumán Lawn Tennis',
-    'Club Universitario',
-    'Club Social Sportivo',
-    'Otro',
-];
+import { VenueChips } from '../../src/components/ui/VenueChips';
+import { CUSTOM_VENUE, normalizeVenue } from '../../src/constants/venues';
 
 export default function ChallengeRespondScreen() {
     const router = useRouter();
@@ -49,8 +42,9 @@ export default function ChallengeRespondScreen() {
         setChallenge(data);
         if (data) {
             setSelectedDate(data.proposed_date ? new Date(data.proposed_date) : null);
-            setSelectedVenue(VENUES.includes(data.proposed_venue ?? '') ? data.proposed_venue : (data.proposed_venue ? 'Otro' : null));
-            setCustomVenue(VENUES.includes(data.proposed_venue ?? '') ? '' : (data.proposed_venue ?? ''));
+            const venue = normalizeVenue(data.proposed_venue);
+            setSelectedVenue(venue ?? (data.proposed_venue && data.proposed_venue !== CUSTOM_VENUE ? CUSTOM_VENUE : null));
+            setCustomVenue(venue || !data.proposed_venue || data.proposed_venue === CUSTOM_VENUE ? '' : data.proposed_venue);
         }
         setFetching(false);
     }, [challengeId, getChallenge]);
@@ -100,7 +94,7 @@ export default function ChallengeRespondScreen() {
         }
     };
 
-    const getFinalVenue = () => selectedVenue === 'Otro' ? (customVenue.trim() || null) : selectedVenue;
+    const getFinalVenue = () => selectedVenue === CUSTOM_VENUE ? (customVenue.trim() || null) : selectedVenue;
 
     const handleAccept = async () => {
         const ok = await acceptChallenge(challenge.id);
@@ -229,18 +223,11 @@ export default function ChallengeRespondScreen() {
                                 <Text style={styles.sectionTitle}>
                                     <Ionicons name="location-outline" size={16} color={Colors.primary} /> Nuevo lugar
                                 </Text>
-                                <View style={styles.venueGrid}>
-                                    {VENUES.map(v => (
-                                        <TouchableOpacity
-                                            key={v}
-                                            style={[styles.venueChip, selectedVenue === v && styles.venueChipActive]}
-                                            onPress={() => setSelectedVenue(prev => prev === v ? null : v)}
-                                        >
-                                            <Text style={[styles.venueChipText, selectedVenue === v && styles.venueChipTextActive]}>{v}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                                {selectedVenue === 'Otro' && (
+                                <VenueChips
+                                    selected={selectedVenue}
+                                    onSelect={v => setSelectedVenue(prev => prev === v ? null : v)}
+                                />
+                                {selectedVenue === CUSTOM_VENUE && (
                                     <TextInput
                                         style={styles.input}
                                         placeholder="Escribí el lugar..."
@@ -324,11 +311,6 @@ const styles = StyleSheet.create({
     dateBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Colors.surfaceContainerLowest, borderRadius: Radius.xl, paddingHorizontal: Spacing.base, paddingVertical: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceContainerHigh },
     dateBtnText: { flex: 1, ...Typography.bodyMd, color: Colors.onSurfaceVariant },
     dateBtnTextActive: { color: Colors.onSurface },
-    venueGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-    venueChip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: Radius.full, backgroundColor: Colors.surfaceContainerLowest, borderWidth: 1, borderColor: Colors.surfaceContainerHigh },
-    venueChipActive: { backgroundColor: Colors.primaryContainer, borderColor: Colors.primary },
-    venueChipText: { ...Typography.labelMd, color: Colors.onSurfaceVariant },
-    venueChipTextActive: { color: Colors.primary },
     input: { backgroundColor: Colors.surfaceContainerLowest, borderRadius: Radius.xl, paddingHorizontal: Spacing.base, paddingVertical: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceContainerHigh, ...Typography.bodyMd, color: Colors.onSurface, fontFamily: 'PlusJakartaSans_400Regular' },
     eloNotice: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.lg, padding: Spacing.md },
     eloNoticeActive: { backgroundColor: Colors.primaryContainer },

@@ -8,13 +8,11 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '../ui/DateTimeField';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
-import { Avatar, Badge, Button, Chip, InputField } from '../ui';
+import { Avatar, Badge, Button, InputField, VenueChips } from '../ui';
 import type { DoublesChallenge, DoublesTeam } from '../../services/doublesService';
+import { CUSTOM_VENUE, VENUES } from '../../constants/venues';
 
-export const VENUES = [
-    'Lawn Tenis Club', 'Club Atlético San Martín', 'Tucumán Lawn Tennis',
-    'Club Universitario', 'Club Social Sportivo', 'Otro',
-] as const;
+export { VENUES };
 
 export interface ChallengeFormPayload {
     date: string | null;
@@ -273,7 +271,7 @@ export function ChallengeFormModal({
     };
 
     const handleSubmit = async () => {
-        const venue = selectedVenue === 'Otro'
+        const venue = selectedVenue === CUSTOM_VENUE
             ? customVenue.trim() || null
             : selectedVenue;
         setSaving(true);
@@ -370,17 +368,11 @@ export function ChallengeFormModal({
                         ) : null}
 
                         <Text style={styles.fieldLabel}>Sede</Text>
-                        <View style={styles.venueWrap}>
-                            {VENUES.map((venue) => (
-                                <Chip
-                                    key={venue}
-                                    label={venue}
-                                    active={selectedVenue === venue}
-                                    onPress={() => setSelectedVenue(prev => prev === venue ? null : venue)}
-                                />
-                            ))}
-                        </View>
-                        {selectedVenue === 'Otro' ? (
+                        <VenueChips
+                            selected={selectedVenue}
+                            onSelect={venue => setSelectedVenue(prev => prev === venue ? null : venue)}
+                        />
+                        {selectedVenue === CUSTOM_VENUE ? (
                             <InputField
                                 label="¿Dónde se juega?"
                                 value={customVenue}
@@ -556,7 +548,6 @@ const styles = StyleSheet.create({
     },
     dateBtnText: { flex: 1, ...Typography.bodyMd, color: Colors.onSurfaceVariant },
     dateBtnTextActive: { color: Colors.onSurface },
-    venueWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     footerRow: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.sm },
     footerBtn: { flex: 1 },
 });

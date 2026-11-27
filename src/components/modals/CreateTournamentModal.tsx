@@ -310,7 +310,7 @@ export default function CreateTournamentModal({
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                         <InputField label="Nombre del torneo" value={name} onChangeText={setName} placeholder="Ej: Copa Primavera" />
                         <InputField label="Descripción" value={description} onChangeText={setDescription} placeholder="Opcional" />
-                        <InputField label="Sede" value={location} onChangeText={setLocation} placeholder="Ej: Lawn Tenis Club" />
+                        <InputField label="Sede" value={location} onChangeText={setLocation} placeholder="Ej: Tucumán Lawn Tennis Club" />
 
                         {isEditing && (
                             <View>

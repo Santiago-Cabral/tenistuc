@@ -14,6 +14,8 @@ import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/stores/authStore';
 import { useLiveRefresh } from '../src/hooks/useLiveRefresh';
 import DateTimePicker, { DateTimePickerEvent } from '../src/components/ui/DateTimeField';
+import { VenueChips } from '../src/components/ui/VenueChips';
+import { CUSTOM_VENUE } from '../src/constants/venues';
 
 interface SetScore { p1: number; p2: number; }
 interface ResultModalState {
@@ -42,11 +44,6 @@ interface MatchSide {
   label: 'Pareja A' | 'Pareja B';
   isMine: boolean;
 }
-
-const VENUES = [
-  'Lawn Tenis Club', 'Club Atlético San Martín', 'Tucumán Lawn Tennis',
-  'Club Universitario', 'Club Social Sportivo', 'Otro',
-];
 
 const isMatchDay = (scheduledAt: string | null): boolean => {
   if (!scheduledAt) return false;
@@ -128,7 +125,7 @@ function ScheduleModal({ state, onClose, onSaved }: {
   };
 
   const getFinalVenue = () => {
-    if (selectedVenue === 'Otro') return customVenue.trim() || null;
+    if (selectedVenue === CUSTOM_VENUE) return customVenue.trim() || null;
     return selectedVenue;
   };
 
@@ -191,22 +188,14 @@ function ScheduleModal({ state, onClose, onSaved }: {
           )}
 
           <Text style={schedStyles.sectionLabel}>Club / Cancha</Text>
-          <View style={schedStyles.venueGrid}>
-            {VENUES.map(v => (
-              <TouchableOpacity
-                key={v}
-                style={[schedStyles.venueChip, selectedVenue === v && schedStyles.venueChipActive]}
-                onPress={() => setSelectedVenue(prev => prev === v ? null : v)}
-                activeOpacity={0.8}
-              >
-                <Text style={[schedStyles.venueChipText, selectedVenue === v && schedStyles.venueChipTextActive]}>
-                  {v}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <ScrollView style={schedStyles.venueScroll} showsVerticalScrollIndicator={false}>
+            <VenueChips
+              selected={selectedVenue}
+              onSelect={v => setSelectedVenue(prev => prev === v ? null : v)}
+            />
+          </ScrollView>
 
-          {selectedVenue === 'Otro' && (
+          {selectedVenue === CUSTOM_VENUE && (
             <TextInput
               style={schedStyles.input} placeholder="Escribí el lugar..."
               placeholderTextColor={Colors.onSurfaceVariant}
@@ -1284,7 +1273,7 @@ const modalStyles = StyleSheet.create({
   sheet: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl,
-    padding: Spacing.xl, paddingBottom: 44, gap: Spacing.lg,
+    padding: Spacing.xl, paddingBottom: 44, gap: Spacing.lg, maxHeight: '90%',
   },
   handle: {
     width: 40, height: 4, borderRadius: 2,
@@ -1384,15 +1373,7 @@ const schedStyles = StyleSheet.create({
   },
   dateBtnText: { flex: 1, ...Typography.bodyMd, color: Colors.onSurfaceVariant },
   dateBtnTextActive: { color: Colors.onSurface },
-  venueGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  venueChip: {
-    paddingVertical: 8, paddingHorizontal: 14,
-    borderRadius: Radius.full, backgroundColor: Colors.surfaceContainerLowest,
-    borderWidth: 1, borderColor: Colors.surfaceContainerHigh,
-  },
-  venueChipActive: { backgroundColor: Colors.primaryContainer, borderColor: Colors.primary },
-  venueChipText: { ...Typography.labelMd, color: Colors.onSurfaceVariant },
-  venueChipTextActive: { color: Colors.primary },
+  venueScroll: { maxHeight: 260 },
   input: {
     backgroundColor: Colors.surfaceContainerLowest, borderRadius: Radius.xl,
     paddingHorizontal: Spacing.base, paddingVertical: Spacing.md,

@@ -65,7 +65,7 @@ values (
     '33333333-3333-4333-8333-333333333333'::uuid,
     'pending',
     now() + interval '1 day',
-    'Lawn Tenis Club',
+    'Tucumán Lawn Tennis Club',
     'Prueba: Dupla A desafía a Dupla B',
     '913f501e-daa9-4db7-9b9f-b3e85919a8b0'::uuid
 );

@@ -10,3 +10,4 @@ export { Text } from './Text';
 export { PrivacyConsent } from './PrivacyConsent';
 export { Skeleton, SkeletonList } from './Skeleton';
 export { AgeCategoryField } from './AgeCategoryField';
+export { VenueChips } from './VenueChips';

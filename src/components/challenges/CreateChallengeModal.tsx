@@ -18,7 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography, Radius } from '../../theme';
 import { useChallenges } from '../../hooks/useChallenges';
 import { MATCH_TYPE_LABELS, type MatchType } from '../../services/matchService';
-import { Avatar } from '../ui';
+import { Avatar, VenueChips } from '../ui';
+import { CUSTOM_VENUE } from '../../constants/venues';
 
 interface Props {
     visible: boolean;
@@ -28,15 +29,6 @@ interface Props {
     rivalAvatar?: string | null;
     onCreated: (challengeId: string) => void;
 }
-
-const VENUES = [
-    'Lawn Tenis Club',
-    'Club Atlético San Martín',
-    'Tucumán Lawn Tennis',
-    'Club Universitario',
-    'Club Social Sportivo',
-    'Otro',
-];
 
 const MATCH_TYPES: {
     value: MatchType;
@@ -62,6 +54,7 @@ export default function CreateChallengeModal({
     const [matchType, setMatchType] = useState<MatchType>('friendly');
     const [date, setDate] = useState<Date | null>(null);
     const [venue, setVenue] = useState('');
+    const [customVenue, setCustomVenue] = useState('');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
     const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
@@ -70,6 +63,7 @@ export default function CreateChallengeModal({
         setMatchType('friendly');
         setDate(null);
         setVenue('');
+        setCustomVenue('');
         setMessage('');
         setPickerMode(null);
     };
@@ -118,7 +112,8 @@ export default function CreateChallengeModal({
         : 'Elegir hora';
 
     const handleCreate = async () => {
-        if (!date || !venue) {
+        const finalVenue = venue === CUSTOM_VENUE ? customVenue.trim() : venue;
+        if (!date || !finalVenue) {
             showAlert('Falta info', 'Debés elegir fecha y sede');
             return;
         }
@@ -128,7 +123,7 @@ export default function CreateChallengeModal({
         const challenge = await createChallenge({
             challengedId: rivalId,
             proposedDate: date.toISOString(),
-            proposedVenue: venue,
+            proposedVenue: finalVenue,
             message: message || undefined,
             matchType,
         });
@@ -216,24 +211,16 @@ export default function CreateChallengeModal({
                         )}
 
                         <Text style={styles.label}>Sede</Text>
-                        <View style={styles.venuesWrap}>
-                            {VENUES.map((v) => (
-                                <TouchableOpacity
-                                    key={v}
-                                    onPress={() => setVenue(v)}
-                                    style={[styles.venueChip, venue === v && styles.venueChipActive]}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.venueChipText,
-                                            venue === v && styles.venueChipTextActive,
-                                        ]}
-                                    >
-                                        {v}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                        <VenueChips selected={venue || null} onSelect={setVenue} />
+                        {venue === CUSTOM_VENUE && (
+                            <TextInput
+                                placeholder="Escribí el lugar..."
+                                placeholderTextColor={Colors.onSurfaceVariant}
+                                value={customVenue}
+                                onChangeText={setCustomVenue}
+                                style={styles.input}
+                            />
+                        )}
 
                         <Text style={styles.label}>Mensaje (opcional)</Text>
                         <TextInput
@@ -322,17 +309,6 @@ const styles = StyleSheet.create({
         paddingVertical: Spacing.base,
     },
     dateBtnText: { ...Typography.bodyMd, color: Colors.onSurface },
-    venuesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-    venueChip: {
-        paddingVertical: Spacing.sm,
-        paddingHorizontal: Spacing.base,
-        borderRadius: Radius.full,
-        borderWidth: 1,
-        borderColor: Colors.surfaceContainerHigh,
-    },
-    venueChipActive: { backgroundColor: Colors.primaryContainer, borderColor: Colors.primary },
-    venueChipText: { ...Typography.bodySm, color: Colors.onSurfaceVariant },
-    venueChipTextActive: { color: Colors.primaryDim },
     row: { flexDirection: 'row', gap: Spacing.base, marginTop: Spacing.base },
     cancelBtn: {
         flex: 1,
