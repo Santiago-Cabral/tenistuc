@@ -8,7 +8,6 @@ import {
     Text,
     TouchableOpacity,
     View,
-    useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -72,9 +71,9 @@ const ATHLETE_SLIDES: Slide[] = [
 
 export default function TutorialScreen() {
     const router = useRouter();
-    const { width } = useWindowDimensions();
     const { profile, updateProfile } = useAuthStore();
     const listRef = useRef<FlatList<Slide>>(null);
+    const [slideWidth, setSlideWidth] = useState(0);
     const [index, setIndex] = useState(0);
     const [finishing, setFinishing] = useState(false);
 
@@ -89,9 +88,9 @@ export default function TutorialScreen() {
     };
 
     const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-        const { contentOffset, layoutMeasurement } = event.nativeEvent;
-        if (!layoutMeasurement.width) return;
-        const next = Math.round(contentOffset.x / layoutMeasurement.width);
+        const { contentOffset } = event.nativeEvent;
+        if (!slideWidth) return;
+        const next = Math.round(contentOffset.x / slideWidth);
         setIndex(current => (current === next ? current : Math.min(Math.max(next, 0), slides.length - 1)));
     };
 
@@ -127,28 +126,36 @@ export default function TutorialScreen() {
                 )}
             </View>
 
-            <FlatList
-                ref={listRef}
-                data={slides}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onScroll={handleScroll}
-                scrollEventThrottle={16}
-                keyExtractor={item => item.id}
-                renderItem={({ item }) => (
-                    <View style={[styles.slide, { width }]}>
-                        <View style={styles.iconBlock}>
-                            <Text style={styles.eyebrow}>{item.eyebrow}</Text>
-                            <View style={styles.iconWrap}>
-                                <Ionicons name={item.icon} size={44} color={Colors.primary} />
+            <View
+                style={styles.listWrap}
+                onLayout={event => setSlideWidth(event.nativeEvent.layout.width)}
+            >
+                {slideWidth > 0 && (
+                    <FlatList
+                        ref={listRef}
+                        data={slides}
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        onScroll={handleScroll}
+                        scrollEventThrottle={16}
+                        keyExtractor={item => item.id}
+                        getItemLayout={(_, i) => ({ length: slideWidth, offset: slideWidth * i, index: i })}
+                        renderItem={({ item }) => (
+                            <View style={[styles.slide, { width: slideWidth }]}>
+                                <View style={styles.iconBlock}>
+                                    <Text style={styles.eyebrow}>{item.eyebrow}</Text>
+                                    <View style={styles.iconWrap}>
+                                        <Ionicons name={item.icon} size={44} color={Colors.primary} />
+                                    </View>
+                                </View>
+                                <Text style={styles.title}>{item.title}</Text>
+                                <Text style={styles.description}>{item.description}</Text>
                             </View>
-                        </View>
-                        <Text style={styles.title}>{item.title}</Text>
-                        <Text style={styles.description}>{item.description}</Text>
-                    </View>
+                        )}
+                    />
                 )}
-            />
+            </View>
 
             <View style={styles.bottom}>
                 <View style={styles.dots}>
@@ -192,6 +199,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: Colors.primary,
     },
+    listWrap: { flex: 1, minHeight: 0 },
     slide: {
         flex: 1,
         alignItems: 'center',

@@ -48,7 +48,7 @@ npx tsc --noEmit   # verificación de tipos
 
 ## Service worker
 
-- `public/sw.js` (`tenistuc-shell-v4`) cachea solo el shell y archivos del mismo origen: `/`, `/index.html`, `/pwa.css`, `/pwa.js`, `/manifest.json`, íconos y `_expo/`.
+- `public/sw.js` (`tenistuc-shell-v5`) cachea solo el shell y archivos del mismo origen: `/`, `/index.html`, `/pwa.css`, `/pwa.js`, `/manifest.json`, íconos y `_expo/`.
 - Navegación: network-first con fallback a `/index.html`.
 - Assets: cache-first; Supabase y dominios externos nunca se cachean.
 - Registro: solo en `Platform.OS === 'web' && process.env.NODE_ENV === 'production'` desde `app/_layout.tsx`.
