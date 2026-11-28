@@ -18,7 +18,7 @@ export const VENUE_GROUPS: VenueGroup[] = [
             { name: 'Complejo Ojo de Agua (Atlético Tucumán)', address: 'RP301, T4000 San Miguel de Tucumán, Tucumán' },
             { name: 'Academia de Tenis LTRC', address: 'Av. Brígido Terán 636' },
             { name: 'Facultad de Educación Física (FACDEF)', address: 'Av. Benjamín Aráoz 751' },
-            { name: 'Club Atlético San Martín, Complejo Natalio Mirkin', address: 'Camino del Perú 900' },
+            { name: 'Argentinos del Norte', address: 'Av. Benjamín Aráoz 650, T4000 San Miguel de Tucumán, Tucumán' },
         ],
     },
     {
@@ -30,6 +30,7 @@ export const VENUE_GROUPS: VenueGroup[] = [
             { name: 'Aiziczon Tennis Academy', address: 'Av. Juan Domingo Perón 1000, esquina Las Rosas' },
             { name: 'Las Lomitas Tennis', address: '3194 C. Jorge Luis Borges, Yerba Buena, Tucumán' },
             { name: 'Tucumán Rugby Club', address: 'Salas y Valdez 1500, T4107 Yerba Buena, Tucumán' },
+            { name: 'Complejo Polideportivo Natalio Mirkin (San Martín)', address: 'Av. Perón 381, Yerba Buena, Tucumán' },
         ],
     },
     {
@@ -69,7 +70,8 @@ export const VENUES: string[] = VENUE_GROUPS.flatMap(group => group.venues.map(v
 const LEGACY_VENUES: Record<string, string> = {
     'lawn tenis club': 'Tucumán Lawn Tennis Club',
     'tucuman lawn tennis': 'Tucumán Lawn Tennis Club',
-    'club atletico san martin': 'Club Atlético San Martín, Complejo Natalio Mirkin',
+    'club atletico san martin': 'Complejo Polideportivo Natalio Mirkin (San Martín)',
+    'club atletico san martin, complejo natalio mirkin': 'Complejo Polideportivo Natalio Mirkin (San Martín)',
 };
 
 const ACCENTS: Record<string, string> = {
